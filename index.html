@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inglês Turbo — 7 Semanas até a Viagem</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#1a2232; --card2:#222c42; --line:#2e3a55;
+    --txt:#e8edf7; --dim:#8fa0bf; --acc:#4f8ef7; --acc2:#2ecc8f; --warn:#f7b84f; --red:#f75f5f;
+    --radius:16px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Segoe UI', system-ui, sans-serif; background:var(--bg); color:var(--txt);
+    display:flex; flex-direction:column; max-width:560px; margin:0 auto; min-height:100vh;
+  }
+  #app{flex:1; overflow-y:auto; padding:18px 16px 90px 16px;}
+  h1{font-size:1.35em; margin-bottom:4px;}
+  h2{font-size:1.1em; margin:18px 0 10px 0;}
+  .dim{color:var(--dim); font-size:.9em;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px;}
+  .card2{background:var(--card2);}
+  .btn{
+    display:inline-block; background:var(--acc); color:#fff; border:none; border-radius:12px;
+    padding:13px 20px; font-size:1em; font-weight:600; cursor:pointer; text-align:center;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn.full{display:block; width:100%;}
+  .btn.green{background:var(--acc2); color:#06281c;}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt);}
+  .btn.small{padding:8px 14px; font-size:.9em; border-radius:10px;}
+  .btn.warn{background:var(--warn); color:#3a2a00;}
+  .btn.red{background:var(--red); color:#fff;}
+  .btn:disabled{opacity:.4; cursor:default;}
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .grow{flex:1;}
+  .pill{background:var(--card2); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:.8em; color:var(--dim);}
+  .big{font-size:1.5em; font-weight:700;}
+  .en{font-size:1.15em; font-weight:600; line-height:1.35;}
+  .pt{color:var(--dim); margin-top:3px;}
+  .say{color:var(--warn); font-size:.85em; margin-top:3px; font-style:italic;}
+  .center{text-align:center;}
+  .mt{margin-top:12px;} .mb{margin-bottom:12px;}
+  nav{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:560px;
+    background:var(--card); border-top:1px solid var(--line); display:flex; z-index:50;
+  }
+  nav button{
+    flex:1; background:none; border:none; color:var(--dim); padding:10px 2px 12px 2px;
+    font-size:.68em; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  nav button .ico{font-size:1.6em;}
+  nav button.on{color:var(--acc);}
+  .prog{height:8px; background:var(--card2); border-radius:99px; overflow:hidden; margin:8px 0;}
+  .prog>div{height:100%; background:linear-gradient(90deg,var(--acc),var(--acc2)); border-radius:99px; transition:width .3s;}
+  .grid7{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  .cell{aspect-ratio:1; border-radius:8px; background:var(--card2); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:.75em; color:var(--dim); cursor:pointer;}
+  .cell.done{background:var(--acc2); color:#06281c; border-color:var(--acc2); font-weight:700;}
+  .cell.today{border:2px solid var(--acc); color:var(--txt);}
+  .cell.lock{opacity:.45;}
+  .phrase-row{border-bottom:1px solid var(--line); padding:12px 0;}
+  .phrase-row:last-child{border-bottom:none;}
+  .opt{display:block; width:100%; text-align:left; background:var(--card2); border:1px solid var(--line);
+    color:var(--txt); border-radius:12px; padding:13px 14px; font-size:1em; margin-bottom:8px; cursor:pointer;}
+  .opt.ok{background:#1d4634; border-color:var(--acc2);}
+  .opt.bad{background:#4a2323; border-color:var(--red);}
+  .tag{font-size:.7em; background:var(--acc); color:#fff; border-radius:6px; padding:2px 7px; vertical-align:middle;}
+  .mic-status{min-height:24px; color:var(--warn); font-size:.9em;}
+  input[type=range]{width:100%;}
+  input[type=text]{width:100%; background:var(--card2); border:1px solid var(--line); color:var(--txt);
+    border-radius:12px; padding:12px 14px; font-size:1em;}
+  select{background:var(--card2); border:1px solid var(--line); color:var(--txt); border-radius:10px; padding:8px; max-width:100%;}
+  .score-big{font-size:2.4em; font-weight:800;}
+  .flash{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:28px 18px; text-align:center; min-height:180px;
+    display:flex; flex-direction:column; justify-content:center; gap:8px;}
+  .streak{font-size:1.05em;}
+  .toast{position:fixed; top:14px; left:50%; transform:translateX(-50%); background:var(--acc2); color:#06281c;
+    padding:10px 18px; border-radius:12px; font-weight:700; z-index:99; display:none;}
+  .speaker-a{color:var(--acc); font-weight:700;} .speaker-b{color:var(--acc2); font-weight:700;}
+  .checkitem{display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px solid var(--line);}
+  .checkitem input{width:20px; height:20px; margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div id="app"></div>
+<nav id="nav"></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   LÍNGUAS (Inglês Turbo) — linguas.autofixtecnologia.app
+   Login + progresso individual na nuvem (Supabase) com cache
+   local para funcionar mesmo com internet instável.
+   Metodologia: FSI + Pimsleur (intervalos de repetição) +
+   shadowing + SRS (SM-2 simplificado) + output imediato.
+   ============================================================ */
+const SB_URL = "https://lojkswypugozkckubanq.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxvamtzd3lwdWdvemtja3ViYW5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NzE0NTksImV4cCI6MjA5NTE0NzQ1OX0.WNEzmxNYhExPWRDSDuToVTcVa0qKUSDWmZ8XwygVVwY";
+const EMAIL_DOMAIN = "linguas.autofixtecnologia.app";
+
+/* ---------- DADOS DO CURSO ----------
+   Formato de frase: [inglês, português, pronúncia aproximada] */
+const WEEKS = [
+{ t:"Sobrevivência Absoluta", g:"Cumprimentar, agradecer, pedir ajuda e se virar quando não entender nada.", days:[
+ { t:"Saudações e apresentação", p:[
+  ["Hello! Hi!","Olá! Oi!","rrelôu / rrái"],
+  ["Good morning. Good evening.","Bom dia. Boa noite (chegando).","gud mórnin / gud ívinin"],
+  ["How are you?","Como você está?","rráu ar iú?"],
+  ["I'm fine, thank you. And you?","Estou bem, obrigado. E você?","aim fáin, thénk iú. end iú?"],
+  ["My name is...","Meu nome é...","mai neim iz..."],
+  ["What's your name?","Qual é o seu nome?","uóts iór neim?"],
+  ["Nice to meet you.","Prazer em conhecer você.","náis tu mít iú"],
+  ["Goodbye! See you later.","Tchau! Até mais.","gudbái! si iú lêiter"]]},
+ { t:"Educação e sobrevivência", p:[
+  ["Please.","Por favor.","plíz"],
+  ["Thank you very much.","Muito obrigado.","thénk iú véri mâtch"],
+  ["Excuse me.","Com licença. / Ei, desculpa (chamar atenção).","eks-kiúz mi"],
+  ["I'm sorry.","Desculpe.","aim sóri"],
+  ["Yes, please. / No, thank you.","Sim, por favor. / Não, obrigado.","iés plíz / nôu thénk iú"],
+  ["I don't understand.","Eu não entendo.","ai dont ânderstend"],
+  ["Can you repeat, please?","Pode repetir, por favor?","quén iú ripít, plíz?"],
+  ["Do you speak Portuguese?","Você fala português?","du iú spík portchuguíz?"]]},
+ { t:"Quando não souber falar", p:[
+  ["I don't speak English very well.","Eu não falo inglês muito bem.","ai dont spík ínglish véri uél"],
+  ["Can you speak slowly, please?","Pode falar devagar, por favor?","quén iú spík slôuli, plíz?"],
+  ["How do you say this in English?","Como se diz isso em inglês?","rráu du iú sei dis in ínglish?"],
+  ["What does this mean?","O que isso significa?","uót dâz dis mín?"],
+  ["Can you help me?","Você pode me ajudar?","quén iú rrélp mi?"],
+  ["I'm from Brazil.","Eu sou do Brasil.","aim fróm brazíl"],
+  ["I'm a tourist.","Eu sou turista.","aim a túrist"],
+  ["Can you write it down, please?","Pode escrever, por favor?","quén iú ráit it dáun, plíz?"]]},
+ { t:"Números e preços", p:[
+  ["One, two, three, four, five.","Um, dois, três, quatro, cinco.","uan, tchú, thrí, fór, fáiv"],
+  ["Six, seven, eight, nine, ten.","Seis, sete, oito, nove, dez.","siks, séven, êit, náin, tén"],
+  ["Eleven, twelve, thirteen... twenty.","Onze, doze, treze... vinte.","iléven, tuélv, thârtín... tuénti"],
+  ["Thirty, forty, fifty, one hundred.","Trinta, quarenta, cinquenta, cem.","thârti, fórti, fífti, uan rrândred"],
+  ["How much is it?","Quanto custa?","rráu mâtch iz it?"],
+  ["It's twenty euros.","São vinte euros.","its tuénti iúrous"],
+  ["What time is it?","Que horas são?","uót táim iz it?"],
+  ["It's two o'clock.","São duas horas.","its tchú oclók"]]},
+ { t:"Perguntas essenciais", p:[
+  ["Where is the bathroom?","Onde é o banheiro?","uér iz de béthrum?"],
+  ["Where is the exit?","Onde é a saída?","uér iz di éksit?"],
+  ["What is this?","O que é isso?","uót iz dis?"],
+  ["When does it open?","Quando abre?","uén dâz it ôupen?"],
+  ["Where can I buy water?","Onde posso comprar água?","uér quén ai bái uóter?"],
+  ["Is it far from here?","É longe daqui?","iz it fár fróm rríer?"],
+  ["Is it near here?","É perto daqui?","iz it níer rríer?"],
+  ["Can I have this, please?","Pode me dar isso, por favor?","quén ai rrév dis, plíz?"]]},
+ { t:"Eu sou / eu tenho / eu quero", p:[
+  ["I'm hungry.","Estou com fome.","aim rrângri"],
+  ["I'm thirsty.","Estou com sede.","aim thârsti"],
+  ["I'm tired.","Estou cansado.","aim táierd"],
+  ["I have a reservation.","Eu tenho uma reserva.","ai rrév a rezervêixon"],
+  ["I don't have cash.","Eu não tenho dinheiro em espécie.","ai dont rrév quésh"],
+  ["I would like a coffee, please.","Eu gostaria de um café, por favor.","ai uud láik a cófi, plíz"],
+  ["I need help.","Eu preciso de ajuda.","ai níd rrélp"],
+  ["It's okay. No problem.","Está tudo bem. Sem problema.","its ouquêi. nôu próblem"]]},
+ { t:"Revisão da Semana 1", review:true, dialog:[
+  ["A","Hello! How are you?","Olá! Como você está?"],
+  ["B","Hi! I'm fine, thank you. And you?","Oi! Estou bem, obrigado. E você?"],
+  ["A","I'm good. Where are you from?","Estou bem. De onde você é?"],
+  ["B","I'm from Brazil. I'm a tourist.","Sou do Brasil. Sou turista."],
+  ["A","Nice! Do you speak English?","Legal! Você fala inglês?"],
+  ["B","A little. Can you speak slowly, please?","Um pouco. Pode falar devagar, por favor?"],
+  ["A","Of course! Nice to meet you.","Claro! Prazer em conhecer você."],
+  ["B","Nice to meet you too!","Prazer em conhecer você também!"]]},
+]},
+{ t:"Aeroporto e Avião", g:"Fazer check-in, passar pela imigração e resolver problemas de voo sem pânico.", days:[
+ { t:"Check-in", p:[
+  ["Where is the check-in counter?","Onde é o balcão de check-in?","uér iz de tchék-in cáunter?"],
+  ["Here is my passport.","Aqui está meu passaporte.","rríer iz mai pésport"],
+  ["I have one suitcase and one backpack.","Tenho uma mala e uma mochila.","ai rrév uan sútqueis end uan békpek"],
+  ["Can I take this as hand luggage?","Posso levar isso como bagagem de mão?","quén ai teik dis az rrénd lâguidj?"],
+  ["A window seat, please.","Um assento na janela, por favor.","a uíndou sít, plíz"],
+  ["What time is boarding?","Que horas é o embarque?","uót táim iz bórding?"],
+  ["What gate is it?","Qual é o portão?","uót guêit iz it?"],
+  ["Is the flight on time?","O voo está no horário?","iz de fláit on táim?"]]},
+ { t:"Segurança e imigração", p:[
+  ["Here is my boarding pass.","Aqui está meu cartão de embarque.","rríer iz mai bórding pés"],
+  ["I'm traveling for tourism.","Estou viajando a turismo.","aim trévelin fór túrizm"],
+  ["I'm staying for two weeks.","Vou ficar duas semanas.","aim stêin fór tchú uíks"],
+  ["I'm staying at a hotel in Berlin.","Vou ficar em um hotel em Berlim.","aim stêin ét a rroutél in berlín"],
+  ["This is my first time here.","É minha primeira vez aqui.","dis iz mai fârst táim rríer"],
+  ["I have nothing to declare.","Não tenho nada a declarar.","ai rrév nâthin tu dicléer"],
+  ["\"Take off your shoes, please.\"","(Entender) \"Tire os sapatos, por favor.\"","teik óf iór shúz, plíz"],
+  ["\"Open your bag, please.\"","(Entender) \"Abra sua bolsa, por favor.\"","ôupen iór bég, plíz"]]},
+ { t:"Dentro do avião", p:[
+  ["Excuse me, this is my seat.","Com licença, este é meu assento.","eks-kiúz mi, dis iz mai sít"],
+  ["Can I have some water, please?","Pode me trazer água, por favor?","quén ai rrév sâm uóter, plíz?"],
+  ["Chicken, please.","Frango, por favor.","tchíquen, plíz"],
+  ["Can I have a blanket, please?","Pode me dar um cobertor, por favor?","quén ai rrév a blénquet, plíz?"],
+  ["How long is the flight?","Quanto tempo dura o voo?","rráu lóng iz de fláit?"],
+  ["Can I change seats?","Posso trocar de assento?","quén ai tchêindj síts?"],
+  ["I feel sick.","Estou me sentindo mal.","ai fíl sík"],
+  ["\"Fasten your seatbelt.\"","(Entender) \"Aperte o cinto.\"","féssen iór sítbelt"]]},
+ { t:"Chegada e conexão", p:[
+  ["Where is baggage claim?","Onde é a esteira de bagagem?","uér iz béguidj clêim?"],
+  ["My suitcase didn't arrive.","Minha mala não chegou.","mai sútqueis dídent aráiv"],
+  ["Where is gate B twelve?","Onde é o portão B12?","uér iz guêit bi tuélv?"],
+  ["I missed my flight. What can I do?","Perdi meu voo. O que posso fazer?","ai míst mai fláit. uót quén ai du?"],
+  ["Where is the taxi stand?","Onde é o ponto de táxi?","uér iz de téksi stend?"],
+  ["Where can I buy a SIM card?","Onde posso comprar um chip de celular?","uér quén ai bái a sim card?"],
+  ["Is there free Wi-Fi here?","Tem Wi-Fi grátis aqui?","iz dér frí uai-fai rríer?"],
+  ["Where can I change money?","Onde posso trocar dinheiro?","uér quén ai tchêindj mâni?"]]},
+ { t:"Problemas de viagem", p:[
+  ["My flight was canceled.","Meu voo foi cancelado.","mai fláit uóz quénceld"],
+  ["When is the next flight?","Quando é o próximo voo?","uén iz de nékst fláit?"],
+  ["I need to change my ticket.","Preciso trocar minha passagem.","ai níd tu tchêindj mai tíquet"],
+  ["Where is the information desk?","Onde é o balcão de informações?","uér iz di informêixon désk?"],
+  ["Can you call a taxi for me?","Pode chamar um táxi para mim?","quén iú cól a téksi fór mi?"],
+  ["How much is a taxi to the city center?","Quanto custa um táxi até o centro?","rráu mâtch iz a téksi tu de cíti cénter?"],
+  ["Can you show me on the map?","Pode me mostrar no mapa?","quén iú shôu mi on de mép?"],
+  ["Where is my hotel? Here is the address.","Onde fica meu hotel? Aqui está o endereço.","uér iz mai rroutél? rríer iz di edrés"]]},
+ { t:"Tempo e lugar", p:[
+  ["Today. Tomorrow. Yesterday.","Hoje. Amanhã. Ontem.","tudêi / tumórou / iésterdei"],
+  ["Now. Later.","Agora. Mais tarde.","náu / lêiter"],
+  ["It's over there.","Fica ali.","its ôuver dér"],
+  ["Go straight, then turn left.","Siga reto, depois vire à esquerda.","gôu strêit, dén târn léft"],
+  ["It's closed now.","Está fechado agora.","its clôuzd náu"],
+  ["The flight is late.","O voo está atrasado.","de fláit iz lêit"],
+  ["After security, go to gate ten.","Depois da segurança, vá ao portão dez.","áfter sekiúriti, gôu tu guêit tén"],
+  ["The next train, please.","O próximo trem, por favor.","de nékst trêin, plíz"]]},
+ { t:"Revisão da Semana 2", review:true, dialog:[
+  ["A","Good morning. Passport, please.","Bom dia. Passaporte, por favor."],
+  ["B","Good morning. Here is my passport.","Bom dia. Aqui está meu passaporte."],
+  ["A","What is the purpose of your trip?","Qual é o propósito da sua viagem?"],
+  ["B","I'm traveling for tourism.","Estou viajando a turismo."],
+  ["A","How long are you staying?","Quanto tempo você vai ficar?"],
+  ["B","Two weeks. I'm staying at a hotel in Berlin.","Duas semanas. Vou ficar em um hotel em Berlim."],
+  ["A","Okay. Enjoy your trip!","Certo. Aproveite a viagem!"],
+  ["B","Thank you very much!","Muito obrigado!"]]},
+]},
+{ t:"Hotel e Hospedagem", g:"Fazer check-in, pedir coisas, reclamar de problemas e fazer check-out.", days:[
+ { t:"Check-in no hotel", p:[
+  ["I have a reservation under the name Silva.","Tenho uma reserva no nome Silva.","ai rrév a rezervêixon ânder de neim Silva"],
+  ["Here is my confirmation.","Aqui está minha confirmação.","rríer iz mai confermêixon"],
+  ["What time is breakfast?","Que horas é o café da manhã?","uót táim iz brékfest?"],
+  ["Is breakfast included?","O café da manhã está incluído?","iz brékfest inclúded?"],
+  ["What floor is my room on?","Em que andar fica meu quarto?","uót flór iz mai rúm on?"],
+  ["What's the Wi-Fi password?","Qual é a senha do Wi-Fi?","uóts de uai-fai pésuord?"],
+  ["Can I have two key cards?","Pode me dar dois cartões-chave?","quén ai rrév tchú qui cards?"],
+  ["What time is check-out?","Que horas é o check-out?","uót táim iz tchék-áut?"]]},
+ { t:"No quarto: pedidos", p:[
+  ["Can I have more towels, please?","Pode me trazer mais toalhas, por favor?","quén ai rrév mór táuels, plíz?"],
+  ["The air conditioning doesn't work.","O ar-condicionado não funciona.","di ér condíxonin dâzent uârk"],
+  ["There's no hot water.","Não tem água quente.","dérz nôu rrót uóter"],
+  ["The room is too cold.","O quarto está frio demais.","de rúm iz tchú côuld"],
+  ["Can you clean my room, please?","Pode limpar meu quarto, por favor?","quén iú clín mai rúm, plíz?"],
+  ["My key card doesn't work.","Meu cartão-chave não funciona.","mai qui card dâzent uârk"],
+  ["The TV doesn't work.","A TV não funciona.","de tiví dâzent uârk"],
+  ["Can I have a late check-out?","Posso fazer um check-out mais tarde?","quén ai rrév a lêit tchék-áut?"]]},
+ { t:"Serviços do hotel", p:[
+  ["Where is the elevator?","Onde é o elevador?","uér iz di élevêitor?"],
+  ["Do you have laundry service?","Vocês têm serviço de lavanderia?","du iú rrév lóndri sârvis?"],
+  ["Can you keep my luggage?","Podem guardar minha bagagem?","quén iú quíp mai lâguidj?"],
+  ["Can you call a taxi for eight a.m.?","Pode chamar um táxi para as 8h?","quén iú cól a téksi fór êit ei-ém?"],
+  ["Is there a gym or a pool?","Tem academia ou piscina?","iz dér a djím ór a púl?"],
+  ["Can I pay by card?","Posso pagar com cartão?","quén ai pêi bái card?"],
+  ["Can you recommend a good restaurant near here?","Pode recomendar um bom restaurante perto daqui?","quén iú recoménd a gud réstoront níer rríer?"],
+  ["One more night, please.","Mais uma noite, por favor.","uan mór náit, plíz"]]},
+ { t:"Problemas e check-out", p:[
+  ["I'd like to check out, please.","Gostaria de fazer o check-out, por favor.","aid láik tu tchék áut, plíz"],
+  ["There is a mistake on my bill.","Há um erro na minha conta.","dér iz a mistêik on mai bíl"],
+  ["I didn't take anything from the minibar.","Não peguei nada do frigobar.","ai dídent teik énithin fróm de mínibar"],
+  ["Can I have a receipt, please?","Pode me dar um recibo, por favor?","quén ai rrév a ricít, plíz?"],
+  ["I left something in my room.","Esqueci uma coisa no meu quarto.","ai léft sâmthin in mai rúm"],
+  ["It's too noisy. Can I change rooms?","Está barulhento demais. Posso trocar de quarto?","its tchú nóizi. quén ai tchêindj rúms?"],
+  ["Can I leave my bags here until six p.m.?","Posso deixar minhas malas aqui até as 18h?","quén ai lív mai bégs rríer antíl siks pi-ém?"],
+  ["Thank you, everything was great.","Obrigado, estava tudo ótimo.","thénk iú, évrithin uóz grêit"]]},
+ { t:"Airbnb e apartamento", p:[
+  ["How do I open the door?","Como abro a porta?","rráu du ai ôupen de dór?"],
+  ["Where can I find the keys?","Onde encontro as chaves?","uér quén ai fáind de quíz?"],
+  ["How does the heater work?","Como funciona o aquecedor?","rráu dâz de rríter uârk?"],
+  ["Where do I put the trash?","Onde coloco o lixo?","uér du ai put de trésh?"],
+  ["Is there a supermarket near here?","Tem um supermercado perto daqui?","iz dér a supermárket níer rríer?"],
+  ["Can you send me the address, please?","Pode me mandar o endereço, por favor?","quén iú sénd mi di edrés, plíz?"],
+  ["I'll arrive at three p.m.","Vou chegar às 15h.","áiu aráiv ét thrí pi-ém"],
+  ["Everything is perfect, thank you!","Está tudo perfeito, obrigado!","évrithin iz pârfect, thénk iú"]]},
+ { t:"Dias e datas", p:[
+  ["Monday, Tuesday, Wednesday.","Segunda, terça, quarta.","mândei, tchúzdei, uénzdei"],
+  ["Thursday, Friday, Saturday, Sunday.","Quinta, sexta, sábado, domingo.","thârzdei, fráidei, séterdei, sândei"],
+  ["From Monday to Friday.","De segunda a sexta.","fróm mândei tu fráidei"],
+  ["I'll stay from the seventh to the fourteenth.","Vou ficar do dia 7 ao dia 14.","áiu stêi fróm de séventh tu de fortínth"],
+  ["This week. Next week.","Esta semana. Semana que vem.","dis uík / nékst uík"],
+  ["This weekend.","Este fim de semana.","dis uík-end"],
+  ["Breakfast is every day at seven.","O café da manhã é todo dia às 7.","brékfest iz évri dei ét séven"],
+  ["See you on Friday!","Até sexta-feira!","si iú on fráidei"]]},
+ { t:"Revisão da Semana 3", review:true, dialog:[
+  ["A","Good evening! Welcome. How can I help you?","Boa noite! Bem-vindo. Como posso ajudar?"],
+  ["B","Hi! I have a reservation under the name Silva.","Oi! Tenho uma reserva no nome Silva."],
+  ["A","Yes, here it is. A room for two nights?","Sim, aqui está. Um quarto para duas noites?"],
+  ["B","Yes. Is breakfast included?","Sim. O café da manhã está incluído?"],
+  ["A","Yes, from seven to ten. Here is your key card.","Sim, das 7 às 10. Aqui está seu cartão-chave."],
+  ["B","Thank you. What's the Wi-Fi password?","Obrigado. Qual é a senha do Wi-Fi?"],
+  ["A","It's on the card. Room three-oh-five, third floor.","Está no cartão. Quarto 305, terceiro andar."],
+  ["B","Perfect, thank you very much!","Perfeito, muito obrigado!"]]},
+]},
+{ t:"Restaurante e Comida", g:"Pedir comida com confiança, falar de preferências e pagar a conta.", days:[
+ { t:"Chegando e pedindo", p:[
+  ["A table for two, please.","Uma mesa para dois, por favor.","a têibol fór tchú, plíz"],
+  ["Can I see the menu, please?","Posso ver o cardápio, por favor?","quén ai si de méniu, plíz?"],
+  ["What do you recommend?","O que você recomenda?","uót du iú recoménd?"],
+  ["I'll have the chicken, please.","Vou querer o frango, por favor.","áiu rrév de tchíquen, plíz"],
+  ["For me, the same, please.","Para mim, o mesmo, por favor.","fór mi, de sêim, plíz"],
+  ["Can I have a beer, please?","Uma cerveja, por favor.","quén ai rrév a bíer, plíz?"],
+  ["Still water, please.","Água sem gás, por favor.","stíl uóter, plíz"],
+  ["That's all, thank you.","É só isso, obrigado.","déts ól, thénk iú"]]},
+ { t:"Preferências e alergias", p:[
+  ["I'm allergic to peanuts.","Sou alérgico a amendoim.","aim alârdjik tu pínâts"],
+  ["I don't eat meat. I'm vegetarian.","Não como carne. Sou vegetariano.","ai dont ít mít. aim vedjetérian"],
+  ["Does this have pork?","Isso tem carne de porco?","dâz dis rrév pórk?"],
+  ["No onions, please.","Sem cebola, por favor.","nôu âniâns, plíz"],
+  ["Is it spicy?","É picante?","iz it spáici?"],
+  ["Can I have it without cheese?","Pode ser sem queijo?","quén ai rrév it uidháut tchíz?"],
+  ["What's in this dish?","O que tem neste prato?","uóts in dis dísh?"],
+  ["It's delicious!","Está delicioso!","its dilíxes"]]},
+ { t:"Durante a refeição", p:[
+  ["Excuse me, we're ready to order.","Com licença, estamos prontos para pedir.","eks-kiúz mi, uír rédi tu órder"],
+  ["This is not what I ordered.","Isso não foi o que eu pedi.","dis iz nót uót ai órderd"],
+  ["My food is cold.","Minha comida está fria.","mai fúd iz côuld"],
+  ["Can I have some more bread, please?","Pode trazer mais pão, por favor?","quén ai rrév sâm mór bréd, plíz?"],
+  ["Can I have a fork, please?","Pode me trazer um garfo, por favor?","quén ai rrév a fórk, plíz?"],
+  ["Everything is great, thank you.","Está tudo ótimo, obrigado.","évrithin iz grêit, thénk iú"],
+  ["Can we see the dessert menu?","Podemos ver o cardápio de sobremesas?","quén uí si de dizârt méniu?"],
+  ["Where is the restroom?","Onde é o banheiro?","uér iz de réstrum?"]]},
+ { t:"Pagando a conta", p:[
+  ["The bill, please.","A conta, por favor.","de bíl, plíz"],
+  ["Can we pay separately?","Podemos pagar separado?","quén uí pêi séparetli?"],
+  ["Together, please.","Junto, por favor.","tuguéder, plíz"],
+  ["Do you accept credit cards?","Vocês aceitam cartão de crédito?","du iú eksépt crédit cards?"],
+  ["Is service included?","O serviço está incluído?","iz sârvis inclúded?"],
+  ["Keep the change.","Fique com o troco.","quíp de tchêindj"],
+  ["Can I have a receipt?","Pode me dar um recibo?","quén ai rrév a ricít?"],
+  ["It was delicious, thank you!","Estava delicioso, obrigado!","it uóz dilíxes, thénk iú"]]},
+ { t:"Café, fast food e mercado", p:[
+  ["A coffee with milk, please.","Um café com leite, por favor.","a cófi uíth mílk, plíz"],
+  ["To go, please. / For here.","Para viagem. / Para comer aqui.","tu gôu, plíz / fór rríer"],
+  ["Medium, please.","Médio, por favor.","mídium, plíz"],
+  ["I'll have the number two, please.","Vou querer o número dois, por favor.","áiu rrév de nâmber tchú, plíz"],
+  ["No ice, please.","Sem gelo, por favor.","nôu áis, plíz"],
+  ["Where can I find the bread?","Onde encontro o pão?","uér quén ai fáind de bréd?"],
+  ["Can I have a bag, please?","Pode me dar uma sacola, por favor?","quén ai rrév a bég, plíz?"],
+  ["Is this fresh?","Isso é fresco?","iz dis frésh?"]]},
+ { t:"Vocabulário de comida", p:[
+  ["I'd like the fish, please.","Eu gostaria do peixe, por favor. (carnes: chicken, beef, pork, fish)","aid láik de físh, plíz"],
+  ["A salad without tomatoes, please.","Uma salada sem tomate, por favor.","a sáled uidháut tomêitous, plíz"],
+  ["For breakfast, eggs and coffee, please.","No café da manhã, ovos e café, por favor.","fór brékfest, égs end cófi, plíz"],
+  ["An orange juice, please.","Um suco de laranja, por favor.","an órindj djús, plíz"],
+  ["Two beers, please.","Duas cervejas, por favor.","tchú bíers, plíz"],
+  ["The ice cream, please.","O sorvete, por favor.","di áis crím, plíz"],
+  ["It's too salty.","Está salgado demais.","its tchú sólti"],
+  ["I'm full, thank you.","Estou satisfeito, obrigado.","aim fúl, thénk iú"]]},
+ { t:"Revisão da Semana 4", review:true, dialog:[
+  ["A","Good evening! A table for two?","Boa noite! Mesa para dois?"],
+  ["B","Yes, please. Can I see the menu?","Sim, por favor. Posso ver o cardápio?"],
+  ["A","Of course. Anything to drink?","Claro. Algo para beber?"],
+  ["B","Two beers and still water, please.","Duas cervejas e água sem gás, por favor."],
+  ["A","Are you ready to order?","Estão prontos para pedir?"],
+  ["B","Yes. I'll have the chicken. What do you recommend for her?","Sim. Vou querer o frango. O que você recomenda para ela?"],
+  ["A","The fish is very good today.","O peixe está muito bom hoje."],
+  ["B","Perfect. The fish, please. Thank you!","Perfeito. O peixe, por favor. Obrigado!"]]},
+]},
+{ t:"Transporte e Direções", g:"Pegar táxi, trem e ônibus, pedir e entender direções sem se perder.", days:[
+ { t:"Táxi e Uber", p:[
+  ["Can you take me to this address, please?","Pode me levar a este endereço, por favor?","quén iú teik mi tu dis edrés, plíz?"],
+  ["To the central station, please.","Para a estação central, por favor.","tu de céntrol stêixon, plíz"],
+  ["How much is it to the airport?","Quanto custa até o aeroporto?","rráu mâtch iz it tu di érport?"],
+  ["Can you stop here, please?","Pode parar aqui, por favor?","quén iú stóp rríer, plíz?"],
+  ["Is it far?","É longe?","iz it fár?"],
+  ["Can I pay by card?","Posso pagar com cartão?","quén ai pêi bái card?"],
+  ["Can you open the trunk, please?","Pode abrir o porta-malas, por favor?","quén iú ôupen de trânk, plíz?"],
+  ["I'm going to the Hilton Hotel.","Estou indo para o Hotel Hilton.","aim gôuin tu de rríltân rroutél"]]},
+ { t:"Trem e metrô", p:[
+  ["Two tickets to Munich, please.","Duas passagens para Munique, por favor.","tchú tíquets tu miúnik, plíz"],
+  ["Which platform is it?","Qual é a plataforma?","uítch plétform iz it?"],
+  ["What time does the train leave?","Que horas o trem sai?","uót táim dâz de trêin lív?"],
+  ["Is this the train to Berlin?","Este é o trem para Berlim?","iz dis de trêin tu berlín?"],
+  ["Do I need to change trains?","Preciso trocar de trem?","du ai níd tu tchêindj trêins?"],
+  ["Which stop do I get off at?","Em qual parada eu desço?","uítch stóp du ai guét óf ét?"],
+  ["Is this seat free?","Este assento está livre?","iz dis sít frí?"],
+  ["Round-trip, please.","Ida e volta, por favor.","ráund-tríp, plíz"]]},
+ { t:"Ônibus e bilhetes", p:[
+  ["Does this bus go to the city center?","Este ônibus vai para o centro?","dâz dis bâs gôu tu de cíti cénter?"],
+  ["Where is the bus stop?","Onde é o ponto de ônibus?","uér iz de bâs stóp?"],
+  ["When is the next bus?","Quando é o próximo ônibus?","uén iz de nékst bâs?"],
+  ["A day ticket, please.","Um bilhete diário, por favor.","a dei tíquet, plíz"],
+  ["Where can I buy tickets?","Onde posso comprar bilhetes?","uér quén ai bái tíquets?"],
+  ["Do I need to validate my ticket?","Preciso validar meu bilhete?","du ai níd tu válideit mai tíquet?"],
+  ["Can you tell me when to get off, please?","Pode me avisar quando descer, por favor?","quén iú tél mi uén tu guét óf, plíz?"],
+  ["Excuse me, this is my stop!","Com licença, esta é minha parada!","eks-kiúz mi, dis iz mai stóp"]]},
+ { t:"Pedindo direções", p:[
+  ["Excuse me, how do I get to the museum?","Com licença, como chego ao museu?","eks-kiúz mi, rráu du ai guét tu de miuzíum?"],
+  ["Go straight ahead.","Siga em frente.","gôu strêit arréd"],
+  ["Turn left at the corner.","Vire à esquerda na esquina.","târn léft ét de córner"],
+  ["Turn right at the traffic light.","Vire à direita no semáforo.","târn ráit ét de tréfik láit"],
+  ["It's next to the bank.","É ao lado do banco.","its nékst tu de bénk"],
+  ["It's in front of the church.","É em frente à igreja.","its in frânt óv de tchârtch"],
+  ["It's about ten minutes on foot.","É uns dez minutos a pé.","its abáut tén mínits on fút"],
+  ["I'm lost. Can you help me?","Estou perdido. Pode me ajudar?","aim lóst. quén iú rrélp mi?"]]},
+ { t:"Aluguel e imprevistos", p:[
+  ["I'd like to rent a bike, please.","Gostaria de alugar uma bicicleta, por favor.","aid láik tu rént a báik, plíz"],
+  ["How much per day?","Quanto custa por dia?","rráu mâtch pâr dei?"],
+  ["Where can I park?","Onde posso estacionar?","uér quén ai park?"],
+  ["Is there a gas station near here?","Tem um posto de gasolina perto daqui?","iz dér a gués stêixon níer rríer?"],
+  ["Can I charge my phone here?","Posso carregar meu celular aqui?","quén ai tchardj mai fôun rríer?"],
+  ["My phone battery is dead.","A bateria do meu celular acabou.","mai fôun béteri iz déd"],
+  ["What's the best way to get there?","Qual é o melhor jeito de chegar lá?","uóts de bést uêi tu guét dér?"],
+  ["Is it safe to walk at night?","É seguro andar à noite?","iz it sêif tu uók ét náit?"]]},
+ { t:"Turismo e passeios", p:[
+  ["Two tickets for the museum, please.","Dois ingressos para o museu, por favor.","tchú tíquets fór de miuzíum, plíz"],
+  ["What time does it open? And close?","Que horas abre? E fecha?","uót táim dâz it ôupen? end clôuz?"],
+  ["Is there a discount for students?","Tem desconto para estudantes?","iz dér a díscaunt fór stúdents?"],
+  ["Can I take pictures here?","Posso tirar fotos aqui?","quén ai teik píktchârs rríer?"],
+  ["Can you take a picture of us, please?","Pode tirar uma foto nossa, por favor?","quén iú teik a píktchâr óv âs, plíz?"],
+  ["What do you recommend visiting?","O que você recomenda visitar?","uót du iú recoménd víziting?"],
+  ["Is there a tour in English?","Tem tour em inglês?","iz dér a túr in ínglish?"],
+  ["It's beautiful!","É lindo!","its biútiful"]]},
+ { t:"Revisão da Semana 5", review:true, dialog:[
+  ["A","Excuse me, how do I get to the central station?","Com licença, como chego à estação central?"],
+  ["B","Go straight ahead and turn left at the corner.","Siga em frente e vire à esquerda na esquina."],
+  ["A","Is it far from here?","É longe daqui?"],
+  ["B","No, it's about ten minutes on foot.","Não, é uns dez minutos a pé."],
+  ["A","Can you show me on the map?","Pode me mostrar no mapa?"],
+  ["B","Sure. We are here, and the station is there.","Claro. Estamos aqui, e a estação é ali."],
+  ["A","Perfect. Thank you very much!","Perfeito. Muito obrigado!"],
+  ["B","You're welcome. Have a nice day!","De nada. Tenha um bom dia!"]]},
+]},
+{ t:"Compras, Dinheiro e Emergências", g:"Comprar, negociar, resolver problemas de saúde e agir em emergências.", days:[
+ { t:"Nas lojas", p:[
+  ["I'm just looking, thank you.","Só estou olhando, obrigado.","aim djâst lúquin, thénk iú"],
+  ["How much is this?","Quanto custa isto?","rráu mâtch iz dis?"],
+  ["Do you have this in a bigger size?","Tem em um tamanho maior?","du iú rrév dis in a bíguer sáiz?"],
+  ["Can I try it on?","Posso experimentar?","quén ai trái it on?"],
+  ["Where is the fitting room?","Onde é o provador?","uér iz de fítin rúm?"],
+  ["Do you have this in black?","Tem em preto?","du iú rrév dis in blék?"],
+  ["I'll take it.","Vou levar.","áiu teik it"],
+  ["It's too expensive. Anything cheaper?","É caro demais. Tem algo mais barato?","its tchú ekspénsiv. énithin tchíper?"]]},
+ { t:"Dinheiro e pagamento", p:[
+  ["Card, please.","No cartão, por favor.","card, plíz"],
+  ["Can I pay in cash?","Posso pagar em dinheiro?","quén ai pêi in quésh?"],
+  ["Where is the nearest ATM?","Onde é o caixa eletrônico mais próximo?","uér iz de níerest ei-ti-ém?"],
+  ["My card isn't working.","Meu cartão não está funcionando.","mai card ízent uârquin"],
+  ["Do you have change?","Você tem troco?","du iú rrév tchêindj?"],
+  ["I'd like a refund, please.","Gostaria de um reembolso, por favor.","aid láik a rífând, plíz"],
+  ["Can I exchange this? It doesn't fit.","Posso trocar isto? Não serviu.","quén ai eks-tchêindj dis? it dâzent fít"],
+  ["Here is the receipt.","Aqui está o recibo.","rríer iz de ricít"]]},
+ { t:"Farmácia e saúde", p:[
+  ["I need something for a headache.","Preciso de algo para dor de cabeça.","ai níd sâmthin fór a rrédeik"],
+  ["I have a stomachache.","Estou com dor de estômago.","ai rrév a stâmek-eik"],
+  ["I have a fever.","Estou com febre.","ai rrév a fíver"],
+  ["I have a cold.","Estou resfriado.","ai rrév a côuld"],
+  ["Do I need a prescription?","Preciso de receita?","du ai níd a preskrípxon?"],
+  ["Where is the nearest pharmacy?","Onde é a farmácia mais próxima?","uér iz de níerest fármaci?"],
+  ["How many times a day do I take it?","Quantas vezes por dia eu tomo?","rráu méni táims a dei du ai teik it?"],
+  ["I don't feel well.","Não estou me sentindo bem.","ai dont fíl uél"]]},
+ { t:"Emergências", p:[
+  ["Help!","Socorro!","rrélp!"],
+  ["Call the police, please!","Chame a polícia, por favor!","cól de polís, plíz!"],
+  ["Call an ambulance!","Chame uma ambulância!","cól an émbiulans!"],
+  ["I need a doctor.","Preciso de um médico.","ai níd a dóktor"],
+  ["It's an emergency!","É uma emergência!","its an imârdjenci!"],
+  ["I lost my passport.","Perdi meu passaporte.","ai lóst mai pésport"],
+  ["Someone stole my wallet.","Alguém roubou minha carteira.","sâmuan stôul mai uólet"],
+  ["Where is the Brazilian consulate?","Onde é o consulado brasileiro?","uér iz de brazílian cônsulet?"]]},
+ { t:"Telefone e internet", p:[
+  ["I'd like a SIM card with internet, please.","Gostaria de um chip com internet, por favor.","aid láik a sim card uíth ínternet, plíz"],
+  ["How much is it per week?","Quanto custa por semana?","rráu mâtch iz it pâr uík?"],
+  ["My phone doesn't work here.","Meu celular não funciona aqui.","mai fôun dâzent uârk rríer"],
+  ["Can I use your phone, please?","Posso usar seu telefone, por favor?","quén ai iúz iór fôun, plíz?"],
+  ["Can you text me the address?","Pode me mandar o endereço por mensagem?","quén iú tékst mi di edrés?"],
+  ["I'll call you later.","Te ligo mais tarde.","áiu cól iú lêiter"],
+  ["Sorry, I have no signal.","Desculpe, estou sem sinal.","sóri, ai rrév nôu sígnol"],
+  ["My number is five-five-five, two-one-three.","Meu número é 555-213.","mai nâmber iz fáiv-fáiv-fáiv, tchú-uan-thrí"]]},
+ { t:"Clima e roupas", p:[
+  ["It's cold today.","Está frio hoje.","its côuld tudêi"],
+  ["It's raining. Do you have an umbrella?","Está chovendo. Você tem guarda-chuva?","its rêinin. du iú rrév an âmbréla?"],
+  ["What's the weather like tomorrow?","Como vai estar o tempo amanhã?","uóts de uéder láik tumórou?"],
+  ["I need a jacket.","Preciso de uma jaqueta.","ai níd a djéquet"],
+  ["It's windy. Take a coat.","Está ventando. Leve um casaco.","its uíndi. teik a côut"],
+  ["The weather is beautiful today.","O tempo está lindo hoje.","de uéder iz biútiful tudêi"],
+  ["It might rain later.","Pode chover mais tarde.","it máit rêin lêiter"],
+  ["I'm freezing!","Estou congelando!","aim frízin!"]]},
+ { t:"Revisão da Semana 6", review:true, dialog:[
+  ["A","Good afternoon. Can I help you?","Boa tarde. Posso ajudar?"],
+  ["B","Yes. I need something for a headache.","Sim. Preciso de algo para dor de cabeça."],
+  ["A","Of course. Do you have any allergies?","Claro. Você tem alguma alergia?"],
+  ["B","No. How many times a day do I take it?","Não. Quantas vezes por dia eu tomo?"],
+  ["A","Twice a day, after meals.","Duas vezes por dia, depois das refeições."],
+  ["B","Perfect. How much is it?","Perfeito. Quanto custa?"],
+  ["A","Six euros, please.","Seis euros, por favor."],
+  ["B","Card, please. Thank you!","No cartão, por favor. Obrigado!"]]},
+]},
+{ t:"Conversação Casual + Reta Final", g:"Papo casual, opiniões, convites — e consolidar TUDO antes do embarque.", days:[
+ { t:"Falando sobre você", p:[
+  ["I'm from Brazil. I live in Brazil.","Sou do Brasil. Moro no Brasil.","aim fróm brazíl. ai lív in brazíl"],
+  ["I work with technology.","Trabalho com tecnologia.","ai uârk uíth teknólodji"],
+  ["I'm here on vacation.","Estou aqui de férias.","aim rríer on vaquêixon"],
+  ["It's my first time in Germany.","É minha primeira vez na Alemanha.","its mai fârst táim in djârmani"],
+  ["I'm traveling with my family.","Estou viajando com minha família.","aim trévelin uíth mai fémili"],
+  ["I'm staying for one week.","Vou ficar uma semana.","aim stêin fór uan uík"],
+  ["I love it here!","Estou adorando aqui!","ai lâv it rríer!"],
+  ["And you? Where are you from?","E você? De onde você é?","end iú? uér ar iú fróm?"]]},
+ { t:"Small talk (papo leve)", p:[
+  ["Nice weather today, isn't it?","Tempo bom hoje, né?","náis uéder tudêi, ízent it?"],
+  ["Do you live here?","Você mora aqui?","du iú lív rríer?"],
+  ["What do you do?","O que você faz (trabalho)?","uót du iú du?"],
+  ["Do you like football? I'm from Brazil!","Você gosta de futebol? Eu sou do Brasil!","du iú láik fútbol? aim fróm brazíl!"],
+  ["Any tips for tourists?","Alguma dica para turistas?","éni típs fór túrists?"],
+  ["I really like the food here.","Gosto muito da comida daqui.","ai ríli láik de fúd rríer"],
+  ["Have a nice day!","Tenha um bom dia!","rrév a náis dei!"],
+  ["It was nice talking to you.","Foi bom conversar com você.","it uóz náis tóquin tu iú"]]},
+ { t:"Opiniões e sentimentos", p:[
+  ["I think it's great.","Acho ótimo.","ai think its grêit"],
+  ["I agree. / I don't agree.","Concordo. / Não concordo.","ai agrí / ai dont agrí"],
+  ["Maybe. I'm not sure.","Talvez. Não tenho certeza.","mêibi. aim nót xúr"],
+  ["That's a good idea!","Boa ideia!","déts a gud aidía!"],
+  ["I'm so happy to be here.","Estou muito feliz de estar aqui.","aim sôu rrépi tu bi rríer"],
+  ["I'm a little tired today.","Estou um pouco cansado hoje.","aim a lítol táierd tudêi"],
+  ["Don't worry.","Não se preocupe.","dont uôrri"],
+  ["That's funny!","Que engraçado!","déts fâni!"]]},
+ { t:"Planos e convites", p:[
+  ["What are you doing tonight?","O que você vai fazer hoje à noite?","uót ar iú dúin tunáit?"],
+  ["Do you want to grab a beer?","Quer tomar uma cerveja?","du iú uónt tu gréb a bíer?"],
+  ["Let's meet at seven.","Vamos nos encontrar às sete.","léts mít ét séven"],
+  ["Where should we meet?","Onde a gente se encontra?","uér xud uí mít?"],
+  ["Sounds good!","Parece ótimo! / Combinado!","sáunds gud!"],
+  ["Sorry, I can't today. Maybe tomorrow?","Desculpe, hoje não posso. Quem sabe amanhã?","sóri, ai quént tudêi. mêibi tumórou?"],
+  ["I'll be there in ten minutes.","Chego aí em dez minutos.","áiu bi dér in tén mínits"],
+  ["See you there!","Te vejo lá!","si iú dér!"]]},
+ { t:"Frases coringa", p:[
+  ["Actually, I'm not sure.","Na verdade, não tenho certeza.","éktchuali, aim nót xúr"],
+  ["Of course! Sure!","Claro! Com certeza!","óv córs! xúr!"],
+  ["No problem. It's okay.","Sem problema. Tudo bem.","nôu próblem. its ouquêi"],
+  ["Really? That's interesting!","Sério? Que interessante!","ríli? déts íntresting!"],
+  ["Wait a moment, please.","Espere um momento, por favor.","uêit a môument, plíz"],
+  ["Just a second.","Só um segundo.","djâst a sécond"],
+  ["Anyway... let's go!","Enfim... vamos!","éniuei... léts gôu!"],
+  ["You know what I mean?","Sabe o que eu quero dizer?","iú nôu uót ai mín?"]]},
+ { t:"Revisão Geral 1 (Simulado)", review:true, allWeeks:true, dialog:[
+  ["A","Hi! Is this seat free?","Oi! Este assento está livre?"],
+  ["B","Yes, of course! Are you a tourist?","Sim, claro! Você é turista?"],
+  ["A","Yes, I'm from Brazil. It's my first time in Germany.","Sim, sou do Brasil. É minha primeira vez na Alemanha."],
+  ["B","Nice! How do you like it here?","Legal! O que está achando daqui?"],
+  ["A","I love it! The food is great and the people are very nice.","Estou adorando! A comida é ótima e as pessoas são muito legais."],
+  ["B","Any plans for tonight?","Algum plano para hoje à noite?"],
+  ["A","Not yet. Any tips for tourists?","Ainda não. Alguma dica para turistas?"],
+  ["B","Sure! Do you want to grab a beer later? I can show you the city.","Claro! Quer tomar uma cerveja mais tarde? Posso te mostrar a cidade."],
+  ["A","Sounds good! Let's meet at seven.","Combinado! Vamos nos encontrar às sete."]]},
+ { t:"Revisão Final + Checklist de Embarque", review:true, allWeeks:true, final:true, dialog:[
+  ["A","Good morning! Passport and boarding pass, please.","Bom dia! Passaporte e cartão de embarque, por favor."],
+  ["B","Good morning! Here you are.","Bom dia! Aqui está."],
+  ["A","Where are you traveling to?","Para onde você está viajando?"],
+  ["B","To Germany. I'm traveling for tourism, for two weeks.","Para a Alemanha. Viajo a turismo, por duas semanas."],
+  ["A","Perfect. Gate twenty-two, boarding at ten thirty.","Perfeito. Portão 22, embarque às 10h30."],
+  ["B","Thank you very much. Have a nice day!","Muito obrigado. Tenha um bom dia!"]]},
+]}
+];
+
+const TRIP_DATE = new Date(2026, 8, 7); // 07/09/2026
+
+/* ---------- ESTADO + CONTA + NUVEM ---------- */
+const DEFAULT_STATE = { done:{}, dates:[], cards:{}, rate:1, slowRate:0.65, voiceName:"", quizScores:{}, shadowScores:{} };
+let S = JSON.parse(JSON.stringify(DEFAULT_STATE));
+let sb = null, USER = null, LS_KEY = null;
+let cloudTimer = null, cloudDirty = false, SYNC = "ok"; // ok | saving | offline
+
+function loadLocal(){
+  try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return Object.assign({}, DEFAULT_STATE, s); }catch(e){}
+  try{ const leg = JSON.parse(localStorage.getItem("inglesTurbo")); if(leg) return Object.assign({}, DEFAULT_STATE, leg); }catch(e){} // progresso antigo (pré-login)
+  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+function save(){
+  S._ts = Date.now();
+  if(LS_KEY) try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){}
+  cloudDirty = true; SYNC = "saving"; renderSync();
+  clearTimeout(cloudTimer); cloudTimer = setTimeout(flushCloud, 2500);
+}
+async function flushCloud(){
+  if(!sb || !USER || !cloudDirty) return;
+  cloudDirty = false;
+  try{
+    const {error} = await sb.from("linguas_progress")
+      .upsert({user_id: USER.id, state: S, updated_at: new Date().toISOString()});
+    if(error) throw error;
+    SYNC = "ok";
+  }catch(e){ cloudDirty = true; SYNC = "offline"; }
+  renderSync();
+}
+window.addEventListener("beforeunload", ()=>{ if(cloudDirty) flushCloud(); });
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden && cloudDirty) flushCloud(); });
+function renderSync(){
+  const el = document.getElementById("syncpill"); if(!el) return;
+  el.textContent = SYNC==="ok" ? "☁️ salvo" : SYNC==="saving" ? "⏳ salvando..." : "📴 offline — salvo no aparelho";
+  el.style.color = SYNC==="offline" ? "var(--warn)" : "var(--dim)";
+}
+function firstName(){ return USER && USER.name ? USER.name.split(" ")[0] : ""; }
+
+/* ---------- LOGIN / BOOT ---------- */
+function renderLoading(msg){
+  document.getElementById("nav").style.display = "none";
+  document.getElementById("app").innerHTML = `<div class="center" style="padding-top:35vh;"><div class="big">🚀 Línguas</div><div class="dim mt">${esc(msg||"Carregando...")}</div></div>`;
+}
+function renderLogin(msg){
+  document.getElementById("nav").style.display = "none";
+  document.getElementById("app").innerHTML = `
+  <div style="max-width:380px;margin:0 auto;padding-top:8vh;">
+    <div class="center mb"><div style="font-size:3em;">🚀</div><h1>Línguas · AutoFix</h1>
+    <div class="dim">Inglês Turbo — 7 semanas até a viagem</div></div>
+    <div class="card">
+      <div class="dim mb">Usuário</div>
+      <input type="text" id="lg-user" placeholder="ex.: maykonastor" autocomplete="username" class="mb" onkeydown="if(event.key==='Enter')document.getElementById('lg-pass').focus()">
+      <div class="dim mb">Senha</div>
+      <input type="password" id="lg-pass" placeholder="sua senha" autocomplete="current-password" class="mb" style="width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:12px 14px;font-size:1em;" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="lg-msg" style="color:var(--red);min-height:22px;font-size:.9em;">${esc(msg||"")}</div>
+      <button class="btn green full" id="lg-btn" onclick="doLogin()">Entrar</button>
+    </div>
+    <div class="dim center" style="font-size:.8em;">Seu progresso fica salvo na sua conta,<br>em qualquer aparelho.</div>
+  </div>`;
+}
+async function doLogin(){
+  const uEl = document.getElementById("lg-user"), pEl = document.getElementById("lg-pass"), m = document.getElementById("lg-msg"), b = document.getElementById("lg-btn");
+  let u = (uEl.value||"").trim().toLowerCase().replace(/\s+/g,"");
+  const p = pEl.value||"";
+  if(!u || !p){ m.textContent = "Preencha usuário e senha."; return; }
+  const email = u.includes("@") ? u : (u + "@" + EMAIL_DOMAIN);
+  b.disabled = true; b.textContent = "Entrando...";
+  try{
+    const {data, error} = await sb.auth.signInWithPassword({email, password: p});
+    if(error){ m.textContent = "Usuário ou senha incorretos."; b.disabled=false; b.textContent="Entrar"; return; }
+    await enterApp(data.session);
+  }catch(e){
+    m.textContent = "Sem conexão. Verifique a internet e tente de novo.";
+    b.disabled = false; b.textContent = "Entrar";
+  }
+}
+async function doLogout(){
+  try{ if(cloudDirty) await flushCloud(); }catch(e){}
+  try{ await sb.auth.signOut(); }catch(e){}
+  location.reload();
+}
+async function enterApp(session){
+  USER = { id: session.user.id,
+           name: (session.user.user_metadata && session.user.user_metadata.name) || "",
+           username: (session.user.user_metadata && session.user.user_metadata.username) || "" };
+  LS_KEY = "inglesTurbo_" + USER.id;
+  S = loadLocal();
+  try{
+    const {data, error} = await sb.from("linguas_progress").select("state, updated_at").eq("user_id", USER.id).maybeSingle();
+    if(!error && data && data.state && Object.keys(data.state).length){
+      const cloudTs = data.state._ts || new Date(data.updated_at).getTime();
+      if(!S._ts || cloudTs >= S._ts) S = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_STATE)), data.state);
+    }
+    SYNC = "ok";
+  }catch(e){ SYNC = "offline"; }
+  save();
+  document.getElementById("nav").style.display = "flex";
+  TAB = "home"; LESSON = null; render();
+}
+async function boot(){
+  renderLoading();
+  if(!window.supabase){ renderLogin("Não consegui carregar o sistema. Verifique a internet e recarregue a página."); return; }
+  sb = window.supabase.createClient(SB_URL, SB_KEY);
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    if(session) await enterApp(session); else renderLogin();
+  }catch(e){ renderLogin(); }
+}
+
+/* ---------- UTILIDADES ---------- */
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addDays(str, n){ const [y,m,d]=str.split("-").map(Number); const dt=new Date(y,m-1,d+n);
+  return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); }
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.display="block"; setTimeout(()=>t.style.display="none", 2200); }
+function daysToTrip(){ return Math.max(0, Math.ceil((TRIP_DATE - new Date())/(1000*60*60*24))); }
+
+function dayList(){ // lista linear de 49 dias: {w, d, day}
+  const out=[]; WEEKS.forEach((wk,w)=>wk.days.forEach((day,d)=>out.push({w, d, day}))); return out;
+}
+const DAYS = dayList();
+function dayId(w,d){ return "w"+w+"d"+d; }
+function currentDayIdx(){ for(let i=0;i<DAYS.length;i++){ if(!S.done[dayId(DAYS[i].w,DAYS[i].d)]) return i; } return DAYS.length-1; }
+function phraseId(w,d,i){ return "w"+w+"d"+d+"p"+i; }
+function allPhrases(){ const out=[]; WEEKS.forEach((wk,w)=>wk.days.forEach((day,d)=>{ if(day.p) day.p.forEach((p,i)=>out.push({id:phraseId(w,d,i), en:p[0], pt:p[1], say:p[2], w, d})); })); return out; }
+const PHRASES = allPhrases();
+const PHRASE_BY_ID = {}; PHRASES.forEach(p=>PHRASE_BY_ID[p.id]=p);
+
+function streak(){
+  const set = new Set(S.dates); let n=0; let d=todayStr();
+  if(!set.has(d)) d = addDays(d,-1); // hoje ainda não fez → conta a partir de ontem
+  while(set.has(d)){ n++; d=addDays(d,-1); }
+  return n;
+}
+function markPracticedToday(){ const t=todayStr(); if(!S.dates.includes(t)){ S.dates.push(t); save(); } }
+
+/* ---------- ÁUDIO (TTS) ---------- */
+let VOICES = [];
+function loadVoices(){ VOICES = speechSynthesis.getVoices().filter(v=>v.lang.toLowerCase().startsWith("en")); }
+if("speechSynthesis" in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function getVoice(){
+  if(!VOICES.length) loadVoices();
+  if(S.voiceName){ const v=VOICES.find(v=>v.name===S.voiceName); if(v) return v; }
+  return VOICES.find(v=>/en-US/i.test(v.lang)) || VOICES[0] || null;
+}
+let speakQueue = null;
+function speak(text, rate, onend){
+  if(!("speechSynthesis" in window)){ toast("Seu navegador não tem áudio de voz. Use Edge ou Chrome."); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/"/g,""));
+  u.lang = "en-US"; const v = getVoice(); if(v) u.voice = v;
+  u.rate = rate || S.rate; u.pitch = 1;
+  if(onend) u.onend = onend;
+  speechSynthesis.speak(u);
+}
+function speakList(items, rate, gapMs, onAll){ // toca uma lista em sequência
+  speechSynthesis.cancel();
+  let i = 0;
+  function next(){
+    if(i >= items.length){ if(onAll) onAll(); return; }
+    const item = items[i]; i++;
+    if(item.before) item.before();
+    speak(item.text, rate, ()=> setTimeout(next, gapMs));
+  }
+  next();
+}
+function stopAudio(){ if("speechSynthesis" in window) speechSynthesis.cancel(); }
+
+/* ---------- RECONHECIMENTO DE VOZ ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recog = null;
+function listen(onResult, onErr){
+  if(!SR){ onErr("no-support"); return; }
+  try{
+    recog = new SR(); recog.lang = "en-US"; recog.interimResults = false; recog.maxAlternatives = 3;
+    recog.onresult = e => { const alts=[]; for(const r of e.results[0]) alts.push(r.transcript); onResult(alts); };
+    recog.onerror = e => onErr(e.error);
+    recog.onend = ()=>{};
+    recog.start();
+  }catch(e){ onErr("error"); }
+}
+function norm(s){ return s.toLowerCase().replace(/["""'''.,!?;:()-]/g," ").replace(/\s+/g," ").trim(); }
+function lev(a,b){
+  const m=a.length, n=b.length; if(!m) return n; if(!n) return m;
+  let prev = Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur; }
+  return prev[n];
+}
+function similarity(target, spoken){
+  const t=norm(target), s=norm(spoken);
+  if(!t.length) return 0;
+  const d = lev(t,s);
+  return Math.max(0, Math.round(100*(1 - d/Math.max(t.length,s.length))));
+}
+function bestSimilarity(target, alts){ return Math.max(...alts.map(a=>similarity(target,a))); }
+
+/* ---------- SRS (repetição espaçada) ---------- */
+function getCard(id){ if(!S.cards[id]) S.cards[id]={iv:0, ease:2.5, due:todayStr(), reps:0, lapses:0}; return S.cards[id]; }
+function gradeCard(id, g){ // 0=errei 1=difícil 2=bom 3=fácil
+  const c = getCard(id);
+  if(g===0){ c.iv=0; c.due=todayStr(); c.lapses++; c.ease=Math.max(1.3, c.ease-0.2); }
+  else{
+    if(c.iv===0){ c.iv = (g===3)?2:1; }
+    else{ const f = g===1?1.2 : g===2?c.ease : c.ease*1.4; c.iv = Math.max(c.iv+1, Math.round(c.iv*f)); }
+    if(g===3) c.ease += 0.15;
+    c.iv = Math.min(c.iv, 60);
+    c.due = addDays(todayStr(), c.iv);
+  }
+  c.reps++; save();
+}
+function dueCards(){ const t=todayStr(); return Object.keys(S.cards).filter(id=>S.cards[id].due<=t && PHRASE_BY_ID[id]); }
+function introducedIds(){ // frases de dias já iniciados/concluídos
+  const out=[]; const cur=currentDayIdx();
+  for(let i=0;i<=cur && i<DAYS.length;i++){ const {w,d,day}=DAYS[i]; if(day.p) day.p.forEach((_,pi)=>out.push(phraseId(w,d,pi))); }
+  return out;
+}
+
+/* ---------- NAVEGAÇÃO ---------- */
+const TABS = [
+  {id:"home", ico:"🏠", label:"Hoje"},
+  {id:"lessons", ico:"📅", label:"Plano"},
+  {id:"phrases", ico:"🧳", label:"Frases"},
+  {id:"srs", ico:"🧠", label:"Revisão"},
+  {id:"progress", ico:"📊", label:"Progresso"},
+  {id:"tips", ico:"🎓", label:"Coach"},
+];
+let TAB = "home";
+function nav(tab){ stopAudio(); TAB=tab; LESSON=null; render(); window.scrollTo(0,0); }
+function renderNav(){
+  document.getElementById("nav").innerHTML = TABS.map(t=>
+    `<button class="${TAB===t.id?'on':''}" onclick="nav('${t.id}')"><span class="ico">${t.ico}</span>${t.label}</button>`).join("");
+}
+
+/* ---------- BÔNUS: ALEMÃO DE CORTESIA ---------- */
+const GERMAN = [
+ ["Hallo!","Olá!","ralô"],
+ ["Guten Morgen!","Bom dia!","gúten mórguen"],
+ ["Guten Tag!","Boa tarde! / Bom dia! (formal)","gúten ták"],
+ ["Guten Abend!","Boa noite! (chegando)","gúten ábent"],
+ ["Tschüss!","Tchau!","tchüss"],
+ ["Auf Wiedersehen!","Até logo! (formal)","auf víder-zêen"],
+ ["Bitte.","Por favor. / De nada.","bíte"],
+ ["Danke schön!","Muito obrigado!","dânke chân"],
+ ["Vielen Dank!","Muitíssimo obrigado!","fílen dânk"],
+ ["Entschuldigung!","Desculpe! / Com licença!","ent-chúldigung"],
+ ["Ja. / Nein.","Sim. / Não.","iá / náin"],
+ ["Sprechen Sie Englisch?","O senhor fala inglês?","chprérren zi énglich?"],
+ ["Ich spreche kein Deutsch.","Eu não falo alemão.","irr chprérre káin dóitch"],
+ ["Ich verstehe nicht.","Eu não entendo.","irr fer-chtêe nirrt"],
+ ["Wie viel kostet das?","Quanto custa isso?","vi fil kóstet dás?"],
+ ["Wo ist die Toilette?","Onde é o banheiro?","vô ist di toaléte?"],
+ ["Die Rechnung, bitte.","A conta, por favor.","di rérrnung, bíte"],
+ ["Ein Bier, bitte.","Uma cerveja, por favor.","áin bíer, bíte"],
+ ["Ein Wasser, bitte.","Uma água, por favor.","áin vásser, bíte"],
+ ["Prost!","Saúde! (brinde)","prôst"],
+ ["Guten Appetit!","Bom apetite!","gúten apetít"],
+ ["Hilfe!","Socorro!","rrílfe"],
+ ["Ich brauche einen Arzt.","Preciso de um médico.","irr bráurre áinen artst"],
+ ["Wo ist der Bahnhof?","Onde é a estação de trem?","vô ist der bán-rôf?"],
+ ["Eine Fahrkarte, bitte.","Uma passagem, por favor.","áine fár-karte, bíte"],
+ ["Ich heiße...","Meu nome é...","irr rráisse..."],
+ ["Freut mich!","Prazer em conhecer!","fróit mirr"],
+ ["Wie geht's?","Como vai?","vi guêts?"],
+ ["Gut, danke!","Bem, obrigado!","gút, dânke"],
+ ["Schönen Tag noch!","Tenha um bom dia!","chânen ták norr"]
+];
+function deVoice(){ const vs = speechSynthesis.getVoices(); return vs.find(v=>/de[-_]DE/i.test(v.lang)) || vs.find(v=>v.lang.toLowerCase().startsWith("de")) || null; }
+function speakDe(text){
+  if(!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/\.\.\./g,""));
+  u.lang = "de-DE"; const v = deVoice(); if(v) u.voice = v;
+  u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+function playAllGerman(){
+  speechSynthesis.cancel();
+  let i = 0;
+  function next(){
+    if(i >= GERMAN.length) return;
+    const u = new SpeechSynthesisUtterance(GERMAN[i][0].replace(/\.\.\./g,""));
+    u.lang = "de-DE"; const v = deVoice(); if(v) u.voice = v; u.rate = 0.85;
+    u.onend = ()=> setTimeout(next, 800);
+    i++; speechSynthesis.speak(u);
+  }
+  next();
+}
+function viewGerman(){
+  const hasVoice = !!deVoice();
+  return `
+  <div class="row mb"><button class="btn ghost small" onclick="nav('home')">← Voltar</button></div>
+  <h1>🇩🇪 Bônus: Alemão de Cortesia</h1>
+  <div class="dim mb">30 frases que abrem portas (e sorrisos) na Alemanha</div>
+  <div class="card card2"><b>🎓 Dica do coach:</b>
+    <div class="dim">O alemão ADORA quando o turista tenta falar alemão — mesmo que sejam só 3 palavras. A jogada de mestre: comece a interação em alemão (<i>"Hallo! Entschuldigung..."</i>) e continue em inglês (<i>"Do you speak English?"</i>). Isso quebra o gelo, mostra respeito e faz todo mundo te tratar melhor. Estude estas frases nos últimos 10 dias antes da viagem, 5 por dia — sem pressão, é bônus.</div></div>
+  ${hasVoice?"":`<div class="card" style="border-color:var(--warn);"><div class="dim">⚠️ Não encontrei voz em alemão neste navegador. No <b>Edge</b>, as vozes alemãs aparecem automaticamente; ou instale em Configurações do Windows → Hora e idioma → Fala.</div></div>`}
+  <div class="row mb">
+    <button class="btn small" onclick="playAllGerman()">▶ Tocar todas</button>
+    <button class="btn ghost small" onclick="stopAudio()">⏹ Parar</button>
+  </div>
+  <div class="card">
+  ${GERMAN.map((g,i)=>`
+    <div class="phrase-row"><div class="row">
+      <button class="btn small" onclick="speakDe(GERMAN[${i}][0])">▶</button>
+      <div class="grow">
+        <div class="en" style="font-size:1em;">${esc(g[0])}</div>
+        <div class="pt">${esc(g[1])}</div>
+        <div class="say">🔉 ${esc(g[2])}</div>
+      </div>
+    </div></div>`).join("")}
+  </div>
+  <div class="card card2 dim">💡 As 5 mais poderosas se você só decorar 5: <b>Hallo</b>, <b>Danke schön</b>, <b>Bitte</b>, <b>Entschuldigung</b> e <b>Tschüss</b>. Com essas + inglês, você navega a Alemanha inteira.</div>`;
+}
+
+/* ---------- TELA: HOJE ---------- */
+function viewHome(){
+  const cur = currentDayIdx(); const {w,d,day} = DAYS[cur];
+  const doneCount = Object.keys(S.done).length;
+  const pct = Math.round(100*doneCount/DAYS.length);
+  const due = dueCards().length;
+  const dt = daysToTrip();
+  return `
+  <div class="row"><h1 class="grow">🚀 Inglês Turbo</h1><span class="pill" id="syncpill">☁️</span></div>
+  <div class="dim mb">${firstName()?`Olá, <b style="color:var(--txt)">${esc(firstName())}</b>! Seu coach de conversação para a viagem`:"Seu coach de conversação para a viagem"}</div>
+  <div class="card card2">
+    <div class="row">
+      <div class="grow"><div class="big">✈️ ${dt} dias</div><div class="dim">até o embarque (07/09/2026)</div></div>
+      <div class="center"><div class="big">🔥 ${streak()}</div><div class="dim">dias seguidos</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="dim">Sua missão de hoje — Semana ${w+1}, Dia ${d+1}</div>
+    <h2 style="margin-top:6px;">${day.review?"🔁":"📖"} ${esc(day.t)}</h2>
+    <div class="dim mb">${esc(WEEKS[w].t)} · ${day.review?"revisão + diálogo real":"8 frases novas · ouvir → repetir → fixar → testar"}</div>
+    <button class="btn green full" onclick="startLesson(${cur})">▶ Começar a lição de hoje (~30-45 min)</button>
+  </div>
+  ${due>0?`<div class="card"><div class="row"><div class="grow"><b>🧠 ${due} frase${due>1?"s":""} para revisar</b><div class="dim">A revisão espaçada é o que grava na memória de longo prazo.</div></div><button class="btn small" onclick="nav('srs')">Revisar</button></div></div>`:""}
+  <div class="card">
+    <div class="dim mb">Progresso do curso: ${doneCount}/${DAYS.length} dias (${pct}%)</div>
+    <div class="prog"><div style="width:${pct}%"></div></div>
+  </div>
+  <div class="card">
+    <b>🧳 Modo Viagem</b>
+    <div class="dim mb">Todas as frases por situação, com áudio, para usar na hora do aperto.</div>
+    <button class="btn ghost full" onclick="nav('phrases')">Abrir frases de emergência</button>
+  </div>
+  <div class="card">
+    <b>🇩🇪 Bônus do coach: Alemão de Cortesia</b>
+    <div class="dim mb">30 frases com áudio — alemão adora quando o turista tenta! Ideal para os últimos 10 dias.</div>
+    <button class="btn ghost full" onclick="nav('german')">Abrir o módulo de alemão</button>
+  </div>`;
+}
+
+/* ---------- TELA: PLANO (lista de dias) ---------- */
+function viewLessons(){
+  const cur = currentDayIdx();
+  let html = `<h1>📅 Plano de 7 Semanas</h1><div class="dim mb">Toque em qualquer dia para (re)fazer. O dia com borda azul é o de hoje.</div>`;
+  let idx = 0;
+  WEEKS.forEach((wk,w)=>{
+    html += `<div class="card"><b>Semana ${w+1} — ${esc(wk.t)}</b><div class="dim mb">${esc(wk.g)}</div><div class="grid7">`;
+    wk.days.forEach((day,d)=>{
+      const i = idx++;
+      const done = S.done[dayId(w,d)];
+      const cls = done?"done":(i===cur?"today":(i>cur?"lock":""));
+      html += `<div class="cell ${cls}" title="${esc(day.t)}" onclick="startLesson(${i})">${day.review?"🔁":d+1}</div>`;
+    });
+    html += `</div></div>`;
+  });
+  return html;
+}
+
+/* ---------- LIÇÃO (máquina de blocos) ---------- */
+let LESSON = null; // {idx, block, i, revealed, quiz, qi, score, shadowBest, srsQueue, srsIdx, listItems}
+function startLesson(idx){
+  stopAudio();
+  const {w,d,day} = DAYS[idx];
+  LESSON = { idx, w, d, day, block:0, i:0, revealed:false, shadowBest:{}, srsQueue:null, srsIdx:0, quiz:null, qi:0, score:0, srsBack:false };
+  TAB="lesson"; render(); window.scrollTo(0,0);
+}
+function lessonBlocks(day){
+  return day.review
+    ? [["🎧","Diálogo real"],["🗣️","Shadowing do diálogo"],["🧠","Flashcards"],["✍️","Quiz"],["🏁","Conclusão"]]
+    : [["🎧","Ouvir"],["🗣️","Shadowing"],["🧠","Flashcards"],["✍️","Quiz"],["🏁","Conclusão"]];
+}
+function lessonHeader(){
+  const L=LESSON; const blocks=lessonBlocks(L.day);
+  const steps = blocks.map((b,i)=>`<span class="pill" style="${i===L.block?'border-color:var(--acc);color:var(--txt);':''}">${b[0]}</span>`).join(" ");
+  return `<div class="row mb">
+    <button class="btn ghost small" onclick="exitLesson()">← Sair</button>
+    <div class="grow center">${steps}</div>
+  </div>
+  <h1>${blocks[L.block][0]} ${blocks[L.block][1]}</h1>
+  <div class="dim mb">Semana ${L.w+1} · Dia ${L.d+1} — ${esc(L.day.t)}</div>`;
+}
+function exitLesson(){ stopAudio(); LESSON=null; TAB="home"; render(); }
+function nextBlock(){ stopAudio(); LESSON.block++; LESSON.i=0; LESSON.revealed=false; render(); window.scrollTo(0,0); }
+
+function viewLesson(){
+  const L=LESSON;
+  if(L.day.review) return viewLessonReview();
+  switch(L.block){
+    case 0: return blockListen();
+    case 1: return blockShadow();
+    case 2: return blockFlash();
+    case 3: return blockQuiz();
+    case 4: return blockDone();
+  }
+}
+
+/* Bloco 1: Ouvir */
+function blockListen(){
+  const L=LESSON; const ps=L.day.p;
+  return lessonHeader()+`
+  <div class="card card2"><b>Como fazer (5 min):</b>
+   <div class="dim">1) Toque ▶ e apenas OUÇA a frase olhando o inglês. 2) Toque na frase para ver a tradução. 3) Ouça tudo de novo com "Tocar tudo". Ouvir ANTES de falar treina seu cérebro para reconhecer os sons.</div></div>
+  <div class="row mb">
+    <button class="btn small" onclick="playAll()">▶ Tocar tudo</button>
+    <button class="btn ghost small" onclick="stopAudio()">⏹ Parar</button>
+  </div>
+  <div class="card">
+  ${ps.map((p,i)=>`
+    <div class="phrase-row" id="pr${i}">
+      <div class="row">
+        <button class="btn small" onclick="event.stopPropagation();speak(PHRASE('${phraseId(L.w,L.d,i)}'))">▶</button>
+        <div class="grow" onclick="toggleReveal(${i})" style="cursor:pointer;">
+          <div class="en">${esc(p[0])}</div>
+          <div class="pt" id="pt${i}" style="display:none;">${esc(p[1])}<div class="say">🔉 ${esc(p[2])}</div></div>
+          <div class="dim" id="hint${i}" style="font-size:.75em;">toque para ver a tradução</div>
+        </div>
+      </div>
+    </div>`).join("")}
+  </div>
+  <button class="btn full green" onclick="nextBlock()">Entendi os sons → Shadowing</button>`;
+}
+function PHRASE(id){ return PHRASE_BY_ID[id].en; }
+function toggleReveal(i){
+  const pt=document.getElementById("pt"+i), h=document.getElementById("hint"+i);
+  const show = pt.style.display==="none";
+  pt.style.display = show?"block":"none"; h.style.display = show?"none":"block";
+}
+function playAll(){
+  const L=LESSON;
+  speakList(L.day.p.map((p,i)=>({text:p[0]})), S.rate, 900);
+}
+
+/* Bloco 2: Shadowing */
+function blockShadow(){
+  const L=LESSON; const ps=L.day.p; const p=ps[L.i]; const id=phraseId(L.w,L.d,L.i);
+  const best = L.shadowBest[L.i];
+  return lessonHeader()+`
+  <div class="card card2"><b>Shadowing (10-15 min):</b>
+   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque 🎤 e fale — o app dá uma nota na sua pronúncia. Meta: 70%+ em cada frase.</div></div>
+  <div class="card center">
+    <div class="dim mb">Frase ${L.i+1} de ${ps.length}</div>
+    <div class="en" style="font-size:1.35em;">${esc(p[0])}</div>
+    <div class="pt">${esc(p[1])}</div>
+    <div class="say">🔉 ${esc(p[2])}</div>
+    <div class="row mt" style="justify-content:center;">
+      <button class="btn" onclick="speak(${JSON.stringify(p[0]).replace(/"/g,"&quot;")}, S.slowRate)">🐢 Devagar</button>
+      <button class="btn" onclick="speak(${JSON.stringify(p[0]).replace(/"/g,"&quot;")})">▶ Normal</button>
+      <button class="btn warn" onclick="micTest()">🎤 Falar</button>
+    </div>
+    <div class="mic-status mt" id="mic"></div>
+    <div id="micScore">${best!==undefined?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div><div class="dim">${best>=70?"Excelente! Pode avançar.":"Ouça de novo e tente mais uma vez."}</div>`:""}</div>
+  </div>
+  <div class="row">
+    <button class="btn ghost" onclick="shadowNav(-1)" ${L.i===0?"disabled":""}>← Anterior</button>
+    <div class="grow"></div>
+    ${L.i<ps.length-1
+      ? `<button class="btn" onclick="shadowNav(1)">Próxima →</button>`
+      : `<button class="btn green" onclick="nextBlock()">Concluir shadowing →</button>`}
+  </div>`;
+}
+function shadowNav(dir){ stopAudio(); LESSON.i=Math.max(0, LESSON.i+dir); render(); }
+function micTest(){
+  const L=LESSON; const p=L.day.p[L.i];
+  const micEl=()=>document.getElementById("mic");
+  if(!SR){
+    micEl().innerHTML = `Reconhecimento de voz indisponível neste navegador (use Edge ou Chrome). Avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
+    return;
+  }
+  micEl().textContent = "🎤 Ouvindo... fale agora!";
+  listen(alts=>{
+    const sc = bestSimilarity(p[0], alts);
+    LESSON.shadowBest[L.i] = Math.max(LESSON.shadowBest[L.i]||0, sc);
+    S.shadowScores[phraseId(L.w,L.d,L.i)] = LESSON.shadowBest[L.i]; save();
+    render();
+  }, err=>{
+    micEl().innerHTML = err==="not-allowed"
+      ? "Permita o microfone no navegador para usar esta função."
+      : `Não consegui ouvir (${err}). Tente de novo, ou avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
+  });
+}
+function selfGrade(sc){ LESSON.shadowBest[LESSON.i]=sc; render(); }
+
+/* Bloco 3: Flashcards (SRS) */
+function buildSrsQueue(){
+  const L=LESSON;
+  const newIds = L.day.p ? L.day.p.map((_,i)=>phraseId(L.w,L.d,i)) : [];
+  newIds.forEach(id=>getCard(id));
+  const due = dueCards();
+  const set = new Set([...due, ...newIds]);
+  let q = [...set];
+  if(L.day.allWeeks){ // simulado: adiciona amostra de todo o curso
+    const extra = shuffle(introducedIds()).slice(0,20);
+    extra.forEach(id=>set.add(id)); q=[...set];
+  }
+  L.srsQueue = shuffle(q).slice(0, 35); L.srsIdx=0; L.revealed=false; save();
+}
+function blockFlash(){
+  const L=LESSON;
+  if(!L.srsQueue) buildSrsQueue();
+  if(L.srsIdx >= L.srsQueue.length){
+    return lessonHeader()+`<div class="card center"><div class="big">🧠 Flashcards concluídos!</div>
+      <div class="dim mt">Frases revisadas: ${L.srsQueue.length}. O app vai trazer cada uma de volta na hora certa para você nunca esquecer.</div></div>
+      <button class="btn full green" onclick="nextBlock()">Ir para o Quiz →</button>`;
+  }
+  const id = L.srsQueue[L.srsIdx]; const p = PHRASE_BY_ID[id];
+  return lessonHeader()+`
+  <div class="dim center mb">Cartão ${L.srsIdx+1} de ${L.srsQueue.length} — pense na resposta EM VOZ ALTA antes de virar</div>
+  <div class="flash">
+    <div class="dim">Como se diz em inglês:</div>
+    <div class="big">${esc(p.pt)}</div>
+    ${L.revealed?`
+      <div class="en mt" style="color:var(--acc2);">${esc(p.en)}</div>
+      <div class="say">🔉 ${esc(p.say)}</div>
+      <button class="btn small ghost" onclick="speak(PHRASE('${id}'))">▶ Ouvir</button>`:""}
+  </div>
+  ${L.revealed?`
+    <div class="dim center mt mb">Você acertou?</div>
+    <div class="row">
+      <button class="btn red grow" onclick="srsGrade('${id}',0)">Errei</button>
+      <button class="btn warn grow" onclick="srsGrade('${id}',1)">Quase</button>
+      <button class="btn grow" onclick="srsGrade('${id}',2)">Acertei</button>
+      <button class="btn green grow" onclick="srsGrade('${id}',3)">Fácil!</button>
+    </div>`
+  :`<button class="btn full mt" onclick="srsReveal('${id}')">Virar cartão</button>`}`;
+}
+function srsReveal(id){ LESSON.revealed=true; render(); speak(PHRASE_BY_ID[id].en); }
+function srsGrade(id,g){
+  gradeCard(id,g);
+  if(g===0) LESSON.srsQueue.push(id); // errou → volta pro fim da fila
+  LESSON.srsIdx++; LESSON.revealed=false; render();
+}
+
+/* Bloco 4: Quiz */
+function buildQuiz(){
+  const L=LESSON;
+  let pool;
+  if(L.day.allWeeks) pool = PHRASES.filter(p=>introducedIds().includes(p.id));
+  else if(L.day.review){ // frases da semana
+    pool = PHRASES.filter(p=>p.w===L.w);
+  } else pool = L.day.p.map((_,i)=>PHRASE_BY_ID[phraseId(L.w,L.d,i)]);
+  pool = shuffle(pool);
+  const n = Math.min(L.day.allWeeks?12:8, pool.length);
+  const qs = [];
+  for(let i=0;i<n;i++){
+    const p = pool[i];
+    const others = shuffle(PHRASES.filter(x=>x.id!==p.id)).slice(0,3);
+    const type = (i%3===2) ? "audio" : (i%2===0 ? "pt2en" : "en2pt");
+    let prompt, correct, opts;
+    if(type==="pt2en"){ prompt = "Como se diz: “"+p.pt+"”"; correct=p.en; opts=shuffle([p.en, ...others.map(o=>o.en)]); }
+    else if(type==="en2pt"){ prompt = "O que significa: “"+p.en+"”"; correct=p.pt; opts=shuffle([p.pt, ...others.map(o=>o.pt)]); }
+    else { prompt="🎧 Ouça e escolha o significado:"; correct=p.pt; opts=shuffle([p.pt, ...others.map(o=>o.pt)]); }
+    qs.push({type, prompt, correct, opts, en:p.en, answered:false, pick:null});
+  }
+  L.quiz = qs; L.qi = 0; L.score = 0;
+}
+function blockQuiz(){
+  const L=LESSON;
+  if(!L.quiz) buildQuiz();
+  if(L.qi >= L.quiz.length){
+    const pct = Math.round(100*L.score/L.quiz.length);
+    S.quizScores[dayId(L.w,L.d)] = pct; save();
+    return lessonHeader()+`
+    <div class="card center">
+      <div class="score-big" style="color:${pct>=70?'var(--acc2)':'var(--warn)'}">${pct}%</div>
+      <div class="dim">${pct>=90?"Excepcional! 🏆":pct>=70?"Muito bom! Aprovado. ✅":"Abaixo de 70% — refaça os flashcards deste dia amanhã. 💪"}</div>
+    </div>
+    <button class="btn full green" onclick="nextBlock()">Finalizar o dia →</button>`;
+  }
+  const q = L.quiz[L.qi];
+  return lessonHeader()+`
+  <div class="dim center mb">Pergunta ${L.qi+1} de ${L.quiz.length} · Acertos: ${L.score}</div>
+  <div class="card">
+    <b>${esc(q.prompt)}</b>
+    ${q.type==="audio"?`<div class="mt"><button class="btn small" onclick="speak(${JSON.stringify(q.en).replace(/"/g,"&quot;")})">▶ Ouvir de novo</button></div>`:""}
+  </div>
+  ${q.opts.map((o,i)=>{
+    let cls="";
+    if(q.answered){ if(o===q.correct) cls="ok"; else if(i===q.pick) cls="bad"; }
+    return `<button class="opt ${cls}" onclick="quizPick(${i})" ${q.answered?"disabled":""}>${esc(o)}</button>`;
+  }).join("")}
+  ${q.answered?`<button class="btn full mt" onclick="quizNext()">${L.qi<L.quiz.length-1?"Próxima →":"Ver resultado →"}</button>`:""}`;
+}
+function quizPick(i){
+  const L=LESSON; const q=L.quiz[L.qi];
+  if(q.answered) return;
+  q.answered=true; q.pick=i;
+  if(q.opts[i]===q.correct){ L.score++; }
+  speak(q.en);
+  render();
+}
+function quizNext(){ stopAudio(); LESSON.qi++; render(); window.scrollTo(0,0); }
+// dispara o áudio da questão de listening ao renderizar
+function maybeAutoAudio(){
+  const L=LESSON;
+  if(L && !L.day.review && L.block===3 && L.quiz && L.qi<L.quiz.length){
+    const q=L.quiz[L.qi]; if(q.type==="audio" && !q.answered && !q.played){ q.played=true; setTimeout(()=>speak(q.en),300); }
+  }
+  if(L && L.day.review && L.block===3 && L.quiz && L.qi<L.quiz.length){
+    const q=L.quiz[L.qi]; if(q.type==="audio" && !q.answered && !q.played){ q.played=true; setTimeout(()=>speak(q.en),300); }
+  }
+}
+
+/* Bloco 5: Conclusão */
+function blockDone(){
+  const L=LESSON;
+  const id = dayId(L.w,L.d);
+  const first = !S.done[id];
+  S.done[id]=true; markPracticedToday(); save();
+  const doneCount = Object.keys(S.done).length;
+  return lessonHeader()+`
+  <div class="card center">
+    <div style="font-size:3em;">🎉</div>
+    <div class="big">Dia concluído!</div>
+    <div class="streak mt">🔥 Sequência: <b>${streak()} dia${streak()>1?"s":""}</b> · 📚 ${doneCount}/${DAYS.length} dias do curso</div>
+    <div class="dim mt">${first?"Frases de hoje entraram no sistema de revisão — elas vão reaparecer nos próximos dias na hora exata de fixar.":"Revisão extra concluída — repetir dias já feitos turbina a memória!"}</div>
+  </div>
+  <div class="card card2">
+    <b>🎯 Missão-bônus do dia (2 min):</b>
+    <div class="dim">Antes de dormir, fale em voz alta 3 frases de hoje SEM olhar o app. Se lembrar das 3, você venceu o dia.</div>
+  </div>
+  <button class="btn full green" onclick="exitLesson()">Voltar ao início</button>`;
+}
+
+/* Lição de revisão (dia 7) */
+function viewLessonReview(){
+  const L=LESSON;
+  switch(L.block){
+    case 0: return blockDialogListen();
+    case 1: return blockDialogShadow();
+    case 2: return blockFlash();
+    case 3: return blockQuiz();
+    case 4: return L.day.final ? blockFinal() : blockDone();
+  }
+}
+function blockDialogListen(){
+  const L=LESSON; const dl=L.day.dialog;
+  return lessonHeader()+`
+  <div class="card card2"><b>Diálogo real (5-10 min):</b>
+   <div class="dim">Esta é uma conversa como a que você vai viver na viagem. 1) Toque "Tocar diálogo" e ouça SEM ler a tradução. 2) Ouça de novo lendo. 3) Toque em cada linha para ver o significado.</div></div>
+  <div class="row mb">
+    <button class="btn small" onclick="playDialog()">▶ Tocar diálogo</button>
+    <button class="btn ghost small" onclick="stopAudio()">⏹ Parar</button>
+  </div>
+  <div class="card">
+  ${dl.map((ln,i)=>`
+    <div class="phrase-row" onclick="toggleReveal(${i})" style="cursor:pointer;">
+      <div class="row">
+        <button class="btn small" onclick="event.stopPropagation();speak(DLINE(${i}))">▶</button>
+        <div class="grow">
+          <div><span class="${ln[0]==='A'?'speaker-a':'speaker-b'}">${ln[0]==='A'?'👤 Atendente':'🧑 Você'}:</span> <span class="en" style="font-size:1em;">${esc(ln[1])}</span></div>
+          <div class="pt" id="pt${i}" style="display:none;">${esc(ln[2])}</div>
+          <div id="hint${i}" style="display:none;"></div>
+        </div>
+      </div>
+    </div>`).join("")}
+  </div>
+  <button class="btn full green" onclick="nextBlock()">Entendi → Fazer o papel do viajante</button>`;
+}
+function DLINE(i){ return LESSON.day.dialog[i][1]; }
+function playDialog(){
+  const L=LESSON;
+  speakList(L.day.dialog.map(ln=>({text:ln[1]})), S.rate, 1000);
+}
+function blockDialogShadow(){
+  const L=LESSON; const lines=L.day.dialog.map((ln,i)=>({ln,i})).filter(x=>x.ln[0]==="B");
+  if(L.i>=lines.length){
+    return lessonHeader()+`<div class="card center"><div class="big">🗣️ Você fez sua parte do diálogo!</div>
+    <div class="dim mt">Na viagem, será exatamente assim. Agora vamos fixar as frases da semana.</div></div>
+    <button class="btn full green" onclick="nextBlock()">Ir para os Flashcards →</button>`;
+  }
+  const {ln} = lines[L.i];
+  const best = L.shadowBest[L.i];
+  return lessonHeader()+`
+  <div class="card card2"><div class="dim">Você é o <b class="speaker-b">🧑 viajante</b>. Ouça sua fala e repita em voz alta. Depois teste no 🎤.</div></div>
+  <div class="card center">
+    <div class="dim mb">Sua fala ${L.i+1} de ${lines.length}</div>
+    <div class="en" style="font-size:1.25em;">${esc(ln[1])}</div>
+    <div class="pt">${esc(ln[2])}</div>
+    <div class="row mt" style="justify-content:center;">
+      <button class="btn" onclick="speak(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")}, S.slowRate)">🐢 Devagar</button>
+      <button class="btn" onclick="speak(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">▶ Normal</button>
+      <button class="btn warn" onclick="micTestDialog(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">🎤 Falar</button>
+    </div>
+    <div class="mic-status mt" id="mic"></div>
+    <div id="micScore">${best!==undefined?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div>`:""}</div>
+  </div>
+  <div class="row">
+    <button class="btn ghost" onclick="shadowNav(-1)" ${L.i===0?"disabled":""}>← Anterior</button>
+    <div class="grow"></div>
+    <button class="btn" onclick="shadowNav(1)">${L.i<lines.length-1?"Próxima →":"Concluir →"}</button>
+  </div>`;
+}
+function micTestDialog(target){
+  const micEl=()=>document.getElementById("mic");
+  if(!SR){ micEl().innerHTML=`Sem reconhecimento de voz aqui (use Edge/Chrome). Avalie: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`; return; }
+  micEl().textContent="🎤 Ouvindo... fale agora!";
+  listen(alts=>{ const sc=bestSimilarity(target,alts); LESSON.shadowBest[LESSON.i]=Math.max(LESSON.shadowBest[LESSON.i]||0,sc); render(); },
+    err=>{ micEl().innerHTML=`Não consegui ouvir (${err}). <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`; });
+}
+function blockFinal(){
+  const L=LESSON;
+  S.done[dayId(L.w,L.d)]=true; markPracticedToday(); save();
+  const items = [
+    "Sei me apresentar e pedir para falarem devagar",
+    "Sei as frases do aeroporto e imigração de cor",
+    "Consigo fazer check-in num hotel e pedir coisas",
+    "Consigo pedir comida e pagar a conta",
+    "Sei pedir e entender direções básicas",
+    "Sei as frases de emergência (Help! / I need a doctor)",
+    "Salvei o Modo Viagem no celular para consultar lá",
+  ];
+  return lessonHeader()+`
+  <div class="card center">
+    <div style="font-size:3em;">🏆</div>
+    <div class="big">CURSO CONCLUÍDO!</div>
+    <div class="dim mt">Você saiu do zero e agora tem ${PHRASES.length} frases de sobrevivência treinadas com ouvido, boca e memória. Isso é mais do que a maioria dos viajantes leva na mala.</div>
+  </div>
+  <div class="card">
+    <b>✅ Checklist de embarque:</b>
+    ${items.map(it=>`<label class="checkitem"><input type="checkbox"><span>${it}</span></label>`).join("")}
+  </div>
+  <div class="card card2">
+    <b>✈️ Na viagem:</b>
+    <div class="dim">Use a aba <b>🧳 Frases</b> como seu tradutor de bolso. Continue revisando 10 min por dia na aba 🧠 Revisão. E lembre: falar errado e ser entendido vale 100x mais que ficar calado. Good luck — you're ready!</div>
+  </div>
+  <button class="btn full green" onclick="exitLesson()">🎉 Finalizar</button>`;
+}
+
+/* ---------- TELA: FRASES (Modo Viagem) ---------- */
+let SEARCH = "";
+function viewPhrases(){
+  const q = norm(SEARCH);
+  let html = `<h1>🧳 Modo Viagem</h1><div class="dim mb">Seu tradutor de bolso: toque ▶ para o app falar por você, ou mostre a tela.</div>
+  <input type="text" placeholder="🔎 Buscar frase... (ex.: banheiro, taxi, conta)" value="${esc(SEARCH)}" oninput="SEARCH=this.value;renderBody()" class="mb">
+  <div id="phrasesBody">`;
+  html += phrasesBody();
+  return html+"</div>";
+}
+function phrasesBody(){
+  const q = norm(SEARCH);
+  let html="";
+  WEEKS.forEach((wk,w)=>{
+    let items=[];
+    wk.days.forEach((day,d)=>{ if(day.p) day.p.forEach((p,i)=>{
+      if(!q || norm(p[0]).includes(q) || norm(p[1]).includes(q)) items.push({p,id:phraseId(w,d,i)});
+    });});
+    if(!items.length) return;
+    html += `<div class="card"><b>${["🟢","✈️","🏨","🍽️","🚆","🛍️","💬"][w]} ${esc(wk.t)}</b>`;
+    items.forEach(({p,id})=>{
+      html += `<div class="phrase-row"><div class="row">
+        <button class="btn small" onclick="speak(PHRASE('${id}'), S.slowRate*1.15)">▶</button>
+        <div class="grow"><div class="en" style="font-size:1em;">${esc(p[0])}</div><div class="pt">${esc(p[1])}</div></div>
+      </div></div>`;
+    });
+    html += `</div>`;
+  });
+  return html || `<div class="card dim center">Nada encontrado. Tente outra palavra.</div>`;
+}
+function renderBody(){ document.getElementById("phrasesBody").innerHTML = phrasesBody(); }
+
+/* ---------- TELA: REVISÃO SRS AVULSA ---------- */
+let R = null;
+function viewSrs(){
+  const due = dueCards();
+  if(!R){
+    return `<h1>🧠 Revisão Inteligente</h1>
+    <div class="dim mb">O app calcula o momento exato em que você está prestes a esquecer cada frase — e a traz de volta. 10 minutos aqui valem por 1 hora de estudo comum.</div>
+    <div class="card center">
+      <div class="score-big">${due.length}</div>
+      <div class="dim">frase${due.length===1?"":"s"} esperando revisão hoje</div>
+    </div>
+    ${due.length?`<button class="btn full green" onclick="startSrs()">▶ Revisar agora</button>`
+    :`<div class="card card2 center dim">Tudo em dia! 🎉 Volte amanhã, ou refaça uma lição na aba 📅 Plano.</div>`}`;
+  }
+  if(R.i>=R.q.length){
+    markPracticedToday();
+    const done=R.q.length; R=null;
+    return `<h1>🧠 Revisão Inteligente</h1>
+    <div class="card center"><div class="big">✅ Revisão concluída!</div><div class="dim mt">${done} frases reforçadas. Sua memória agradece.</div></div>
+    <button class="btn full" onclick="render()">Voltar</button>`;
+  }
+  const id=R.q[R.i]; const p=PHRASE_BY_ID[id];
+  return `<h1>🧠 Revisão</h1>
+  <div class="dim center mb">Cartão ${R.i+1} de ${R.q.length}</div>
+  <div class="flash">
+    <div class="dim">Diga em inglês (em voz alta!):</div>
+    <div class="big">${esc(p.pt)}</div>
+    ${R.rev?`<div class="en mt" style="color:var(--acc2);">${esc(p.en)}</div><div class="say">🔉 ${esc(p.say)}</div>
+      <button class="btn small ghost" onclick="speak(PHRASE('${id}'))">▶ Ouvir</button>`:""}
+  </div>
+  ${R.rev?`<div class="row mt">
+      <button class="btn red grow" onclick="srsGrade2('${id}',0)">Errei</button>
+      <button class="btn warn grow" onclick="srsGrade2('${id}',1)">Quase</button>
+      <button class="btn grow" onclick="srsGrade2('${id}',2)">Acertei</button>
+      <button class="btn green grow" onclick="srsGrade2('${id}',3)">Fácil!</button></div>`
+  :`<button class="btn full mt" onclick="R.rev=true;render();speak(PHRASE('${id}'))">Virar cartão</button>`}`;
+}
+function startSrs(){ R={q:shuffle(dueCards()).slice(0,40), i:0, rev:false}; render(); }
+function srsGrade2(id,g){ gradeCard(id,g); if(g===0) R.q.push(id); R.i++; R.rev=false; render(); }
+
+/* ---------- TELA: PROGRESSO ---------- */
+function viewProgress(){
+  const doneCount=Object.keys(S.done).length;
+  const pct=Math.round(100*doneCount/DAYS.length);
+  const learned=Object.values(S.cards).filter(c=>c.reps>0).length;
+  const strong=Object.values(S.cards).filter(c=>c.iv>=7).length;
+  const quizzes=Object.entries(S.quizScores);
+  const avgQuiz=quizzes.length?Math.round(quizzes.reduce((a,[,v])=>a+v,0)/quizzes.length):null;
+  let weekHtml="";
+  let idx=0;
+  WEEKS.forEach((wk,w)=>{
+    const total=wk.days.length;
+    const d=wk.days.filter((day,di)=>S.done[dayId(w,di)]).length;
+    weekHtml+=`<div class="row" style="margin-bottom:6px;"><div style="width:90px;" class="dim">Semana ${w+1}</div><div class="grow"><div class="prog" style="margin:0;"><div style="width:${Math.round(100*d/total)}%"></div></div></div><div class="dim" style="width:40px;text-align:right;">${d}/${total}</div></div>`;
+  });
+  return `<h1>📊 Seu Progresso</h1>
+  <div class="row mb">
+    <div class="card grow center" style="margin-bottom:0;"><div class="big">🔥 ${streak()}</div><div class="dim">dias seguidos</div></div>
+    <div class="card grow center" style="margin-bottom:0;"><div class="big">✈️ ${daysToTrip()}</div><div class="dim">dias p/ viagem</div></div>
+  </div>
+  <div class="card">
+    <b>Curso: ${doneCount}/${DAYS.length} dias (${pct}%)</b>
+    <div class="prog"><div style="width:${pct}%"></div></div>
+    ${weekHtml}
+  </div>
+  <div class="card">
+    <b>Memória</b>
+    <div class="dim mt">🗣️ Frases treinadas: <b style="color:var(--txt)">${learned}</b> de ${PHRASES.length}</div>
+    <div class="dim">💪 Fortes na memória de longo prazo (intervalo ≥ 7 dias): <b style="color:var(--txt)">${strong}</b></div>
+    ${avgQuiz!==null?`<div class="dim">✍️ Média nos quizzes: <b style="color:${avgQuiz>=70?'var(--acc2)':'var(--warn)'}">${avgQuiz}%</b></div>`:""}
+  </div>
+  <div class="card">
+    <b>⚙️ Ajustes de voz</b>
+    <div class="dim mt">Velocidade normal: <span id="rateVal">${S.rate.toFixed(2)}</span>x</div>
+    <input type="range" min="0.6" max="1.2" step="0.05" value="${S.rate}" oninput="S.rate=+this.value;save();document.getElementById('rateVal').textContent=S.rate.toFixed(2)" onchange="speak('Hello! How are you?')">
+    <div class="dim mt">Voz do inglês:</div>
+    <select onchange="S.voiceName=this.value;save();speak('Hello! Nice to meet you.')">
+      ${VOICES.map(v=>`<option value="${esc(v.name)}" ${S.voiceName===v.name?"selected":""}>${esc(v.name)} (${v.lang})</option>`).join("")||"<option>Carregando vozes...</option>"}
+    </select>
+    <div class="dim mt" style="font-size:.8em;">Dica: no Windows, as vozes "Microsoft ... Online (Natural)" do Edge são as mais realistas.</div>
+  </div>
+  <div class="card">
+    <b>👤 Conta</b>
+    <div class="dim mt">Conectado como <b style="color:var(--txt)">${esc(USER?USER.name:"")}</b> (${esc(USER?USER.username:"")})</div>
+    <div class="dim mb">Progresso sincronizado na nuvem — entre em qualquer aparelho com seu usuário.</div>
+    <button class="btn ghost small" onclick="doLogout()">Sair da conta</button>
+  </div>
+  <div class="card card2">
+    <b>🗑️ Zona de perigo</b>
+    <div class="dim mb">Apaga todo o SEU progresso (só o seu) e recomeça do dia 1.</div>
+    <button class="btn red small" onclick="resetAll()">Resetar tudo</button>
+  </div>`;
+}
+async function resetAll(){
+  if(!confirm("Apagar TODO o seu progresso? Isso não afeta os outros usuários.")) return;
+  try{ localStorage.removeItem(LS_KEY); localStorage.removeItem("inglesTurbo"); }catch(e){}
+  S = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  try{ await sb.from("linguas_progress").upsert({user_id: USER.id, state: S, updated_at: new Date().toISOString()}); }catch(e){}
+  location.reload();
+}
+
+/* ---------- TELA: COACH (dicas + metodologia + recursos) ---------- */
+function viewTips(){
+  return `<h1>🎓 Seu Coach</h1>
+  <div class="card">
+    <div class="row"><div class="grow"><b>🇩🇪 Alemão de Cortesia (bônus)</b>
+    <div class="dim">30 frases com áudio para conquistar os alemães.</div></div>
+    <button class="btn small" onclick="nav('german')">Abrir</button></div>
+  </div>
+  <div class="card">
+    <b>📋 Sua rotina diária ideal (45-55 min)</b>
+    <div class="dim mt">
+    ☀️ <b>Manhã (20-25 min):</b> a lição do dia no app (ouvir + shadowing).<br><br>
+    🕐 <b>Almoço (10 min):</b> aba 🧠 Revisão — flashcards pendentes.<br><br>
+    🌙 <b>Noite (15-20 min):</b> quiz da lição + 10 min de YouTube/podcast (lista abaixo) + falar 3 frases de cabeça antes de dormir.<br><br>
+    <b>Regra de ouro:</b> nunca fique 2 dias sem abrir o app. Perder 1 dia acontece; perder 2 vira desistência.</div>
+  </div>
+  <div class="card">
+    <b>🗣️ Como praticar fala SOZINHO (as 5 técnicas)</b>
+    <div class="dim mt">
+    1. <b>Shadowing</b> (já está no app): repita imediatamente após o áudio, imitando ritmo e entonação como um papagaio.<br><br>
+    2. <b>Narração da vida:</b> narre o que você faz, em inglês simples: "I'm drinking coffee. I'm tired. Let's go!" 5 min/dia no chuveiro ou no trânsito.<br><br>
+    3. <b>Teatro de um homem só:</b> encene as duas partes dos diálogos do app em voz alta (você é o garçom E o cliente).<br><br>
+    4. <b>Espelho de 1 minuto:</b> todo dia, 1 minuto se apresentando no espelho: nome, país, por que viaja. No fim da semana isso sai automático.<br><br>
+    5. <b>Grave-se no celular</b> 1x por semana falando 5 frases. Compare com a semana anterior — ouvir a própria evolução é o maior motivador que existe.</div>
+  </div>
+  <div class="card">
+    <b>🧪 A metodologia por trás do app</b>
+    <div class="dim mt">
+    • <b>FSI (diplomatas dos EUA):</b> prioridade total a frases de alta frequência e repetição oral intensiva — não gramática.<br>
+    • <b>Pimsleur:</b> ouvir → responder em voz alta → reencontrar a frase em intervalos crescentes (o app agenda isso sozinho nos flashcards).<br>
+    • <b>Krashen (input compreensível):</b> você sempre ouve ANTES de falar, com tradução à mão.<br>
+    • <b>Output imediato:</b> toda frase ouvida é falada em voz alta no mesmo minuto — é isso que destrava a boca.<br>
+    • <b>Repetição espaçada (SRS):</b> revisar na hora exata do quase-esquecimento grava para sempre.</div>
+  </div>
+  <div class="card">
+    <b>🎧 Recursos gratuitos (10-15 min/dia, a partir da semana 2)</b>
+    <div class="dim mt">
+    • <b>YouTube — "Speak English With Vanessa"</b> e <b>"English Speaking Course" (Learn English with Bob the Canadian)</b>: listening real e devagar.<br>
+    • <b>YouTube — "Easy English"</b>: entrevistas de rua com legendas — sotaques reais.<br>
+    • <b>Podcast — "ESLPod" ou "Speak English Now" (Georgiana)</b>: técnica de escuta + repetição.<br>
+    • <b>App — Language Reactor</b> (extensão grátis do Chrome): Netflix/YouTube com legenda dupla PT+EN.<br>
+    • <b>HelloTalk / Tandem</b> (grátis): converse por texto/áudio com nativos que estão aprendendo português.<br>
+    • <b>ChatGPT/Claude no celular:</b> peça "role-play: você é o garçom, eu sou o cliente" e pratique por voz.<br><br>
+    <b>Como usar:</b> escolha UM vídeo/episódio por dia, ouça 2x (1ª sem ler, 2ª lendo), roube 1 frase que gostou e adicione à sua fala.</div>
+  </div>
+  <div class="card">
+    <b>🔥 Motivação e medição semanal</b>
+    <div class="dim mt">
+    • <b>Toda sexta:</b> refaça o quiz do dia de revisão da semana. Meta: 70%+. Abaixo disso, repita 2 dias da semana no fim de semana.<br>
+    • <b>Grave o "vídeo do progresso"</b> no domingo: 1 min falando o que aprendeu. Na semana 7 você vai assistir o do dia 1 e não vai acreditar.<br>
+    • <b>Pense na cena:</b> você no balcão do hotel em Berlim, dizendo "Hi! I have a reservation" — e sendo entendido. Cada sessão de 30 min é um passo até essa cena.<br>
+    • <b>Regra dos 5 minutos:</b> sem vontade de estudar? Prometa fazer só 5 minutos. Começar é 90% da batalha.</div>
+  </div>`;
+}
+
+/* ---------- RENDER ---------- */
+function render(){
+  let html="";
+  if(TAB==="lesson" && LESSON) html=viewLesson();
+  else if(TAB==="home") html=viewHome();
+  else if(TAB==="lessons") html=viewLessons();
+  else if(TAB==="phrases") html=viewPhrases();
+  else if(TAB==="srs") html=viewSrs();
+  else if(TAB==="progress") html=viewProgress();
+  else if(TAB==="tips") html=viewTips();
+  else if(TAB==="german") html=viewGerman();
+  document.getElementById("app").innerHTML=html;
+  renderNav();
+  renderSync();
+  maybeAutoAudio();
+}
+boot();
+setTimeout(()=>{ if(USER) render(); }, 900); // re-render após vozes carregarem
+</script>
+</body>
+</html>
