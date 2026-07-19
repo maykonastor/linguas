@@ -567,33 +567,89 @@ const TRIP_DATE = new Date(2026, 8, 7); // 07/09/2026
 /* ---------- ESTADO + CONTA + NUVEM ---------- */
 const DEFAULT_STATE = { done:{}, dates:[], cards:{}, rate:1, slowRate:0.65, voiceName:"", quizScores:{}, shadowScores:{} };
 let S = JSON.parse(JSON.stringify(DEFAULT_STATE));
-let sb = null, USER = null, LS_KEY = null;
-let cloudTimer = null, cloudDirty = false, SYNC = "ok"; // ok | saving | offline
+let sb = null, USER = null, LS_KEY = null, ACCESS_TOKEN = null;
+let cloudTimer = null, retryTimer = null, cloudDirty = false, flushing = false;
+let cloudLoaded = false;   // só publica na nuvem depois de 1 leitura bem-sucedida
+let APP_READY = false;
+let SYNC = "ok"; // ok | saving | offline
 
+function blank(){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
 function loadLocal(){
-  try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return Object.assign({}, DEFAULT_STATE, s); }catch(e){}
-  try{ const leg = JSON.parse(localStorage.getItem("inglesTurbo")); if(leg) return Object.assign({}, DEFAULT_STATE, leg); }catch(e){} // progresso antigo (pré-login)
-  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+  try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return Object.assign(blank(), s); }catch(e){}
+  return blank();
 }
+function persistLocal(){ if(LS_KEY) try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
+
+/* Merge de UNIÃO entre dois estados: progresso nunca se perde por corrida
+   de timestamps — dias feitos somam, cartão mais avançado vence, nota máxima fica. */
+function mergeStates(a, b){
+  a = a || blank(); b = b || blank();
+  const out = blank();
+  out.resetAt = Math.max(a.resetAt||0, b.resetAt||0);
+  const dead = s => (out.resetAt && (s._ts||0) < out.resetAt); // lado anterior a um reset não contribui
+  const A = dead(a) ? blank() : a, B = dead(b) ? blank() : b;
+  const newer = ((B._ts||0) >= (A._ts||0)) ? B : A;
+  out.rate = newer.rate!=null ? newer.rate : out.rate;
+  out.slowRate = newer.slowRate!=null ? newer.slowRate : out.slowRate;
+  out.voiceName = newer.voiceName || "";
+  Object.assign(out.done, A.done||{}, B.done||{});
+  out.dates = [...new Set([...(A.dates||[]), ...(B.dates||[])])].sort();
+  const ids = new Set([...Object.keys(A.cards||{}), ...Object.keys(B.cards||{})]);
+  ids.forEach(id=>{
+    const ca=(A.cards||{})[id], cb=(B.cards||{})[id];
+    out.cards[id] = !ca ? cb : !cb ? ca :
+      (((cb.reps||0) > (ca.reps||0)) || ((cb.reps||0)===(ca.reps||0) && (cb.due||"") >= (ca.due||"")) ? cb : ca);
+  });
+  ["quizScores","shadowScores"].forEach(k=>{
+    const keys = new Set([...Object.keys(A[k]||{}), ...Object.keys(B[k]||{})]);
+    keys.forEach(q=> out[k][q] = Math.max((A[k]||{})[q]||0, (B[k]||{})[q]||0));
+  });
+  out._ts = Math.max(A._ts||0, B._ts||0, 1);
+  return out;
+}
+
 function save(){
   S._ts = Date.now();
-  if(LS_KEY) try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){}
+  persistLocal();
   cloudDirty = true; SYNC = "saving"; renderSync();
-  clearTimeout(cloudTimer); cloudTimer = setTimeout(flushCloud, 2500);
+  clearTimeout(cloudTimer); cloudTimer = setTimeout(flushCloud, 1500);
 }
 async function flushCloud(){
-  if(!sb || !USER || !cloudDirty) return;
-  cloudDirty = false;
+  if(!sb || !USER || !cloudDirty || !cloudLoaded) return;
+  if(flushing){ clearTimeout(retryTimer); retryTimer = setTimeout(flushCloud, 1200); return; }
+  flushing = true; cloudDirty = false;
   try{
+    // upload não-destrutivo: lê o que está na nuvem, une com o local e grava a união —
+    // outro aparelho publicando ao mesmo tempo nunca é apagado
+    const {data, error: e1} = await sb.from("linguas_progress").select("state").eq("user_id", USER.id).maybeSingle();
+    if(e1) throw e1;
+    if(data && data.state && Object.keys(data.state).length){ S = mergeStates(S, data.state); persistLocal(); }
     const {error} = await sb.from("linguas_progress")
       .upsert({user_id: USER.id, state: S, updated_at: new Date().toISOString()});
     if(error) throw error;
     SYNC = "ok";
-  }catch(e){ cloudDirty = true; SYNC = "offline"; }
-  renderSync();
+  }catch(e){
+    cloudDirty = true; SYNC = "offline";
+    clearTimeout(retryTimer); retryTimer = setTimeout(flushCloud, 10000); // tenta de novo sozinho
+  }
+  flushing = false; renderSync();
 }
-window.addEventListener("beforeunload", ()=>{ if(cloudDirty) flushCloud(); });
-document.addEventListener("visibilitychange", ()=>{ if(document.hidden && cloudDirty) flushCloud(); });
+/* Descarga garantida ao fechar a aba: fetch com keepalive sobrevive ao unload */
+function flushBeacon(){
+  if(!cloudDirty || !USER || !ACCESS_TOKEN || !cloudLoaded) return;
+  try{
+    fetch(SB_URL + "/rest/v1/linguas_progress?on_conflict=user_id", {
+      method: "POST", keepalive: true,
+      headers: { "apikey": SB_KEY, "Authorization": "Bearer "+ACCESS_TOKEN,
+                 "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({user_id: USER.id, state: S, updated_at: new Date().toISOString()})
+    });
+    cloudDirty = false;
+  }catch(e){}
+}
+window.addEventListener("pagehide", flushBeacon);
+window.addEventListener("beforeunload", flushBeacon);
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) flushBeacon(); });
 function renderSync(){
   const el = document.getElementById("syncpill"); if(!el) return;
   el.textContent = SYNC==="ok" ? "☁️ salvo" : SYNC==="saving" ? "⏳ salvando..." : "📴 offline — salvo no aparelho";
@@ -628,19 +684,30 @@ async function doLogin(){
   let u = (uEl.value||"").trim().toLowerCase().replace(/\s+/g,"");
   const p = pEl.value||"";
   if(!u || !p){ m.textContent = "Preencha usuário e senha."; return; }
+  if(!sb){
+    if(window.supabase) sb = window.supabase.createClient(SB_URL, SB_KEY);
+    else { m.textContent = "O sistema não carregou. Recarregue a página (F5) com internet."; return; }
+  }
   const email = u.includes("@") ? u : (u + "@" + EMAIL_DOMAIN);
   b.disabled = true; b.textContent = "Entrando...";
   try{
     const {data, error} = await sb.auth.signInWithPassword({email, password: p});
-    if(error){ m.textContent = "Usuário ou senha incorretos."; b.disabled=false; b.textContent="Entrar"; return; }
+    if(error){
+      const st = error.status;
+      m.textContent = (st===400 || st===401 || st===403 || st===422)
+        ? "Usuário ou senha incorretos."
+        : "Falha de conexão. Verifique a internet e tente de novo.";
+      b.disabled=false; b.textContent="Entrar"; return;
+    }
     await enterApp(data.session);
   }catch(e){
-    m.textContent = "Sem conexão. Verifique a internet e tente de novo.";
+    m.textContent = "Falha de conexão. Verifique a internet e tente de novo.";
     b.disabled = false; b.textContent = "Entrar";
   }
 }
 async function doLogout(){
   try{ if(cloudDirty) await flushCloud(); }catch(e){}
+  try{ flushBeacon(); }catch(e){}
   try{ await sb.auth.signOut(); }catch(e){}
   location.reload();
 }
@@ -648,24 +715,65 @@ async function enterApp(session){
   USER = { id: session.user.id,
            name: (session.user.user_metadata && session.user.user_metadata.name) || "",
            username: (session.user.user_metadata && session.user.user_metadata.username) || "" };
+  ACCESS_TOKEN = session.access_token || null;
   LS_KEY = "inglesTurbo_" + USER.id;
   S = loadLocal();
+  let cloud = null, loadErr = false;
   try{
     const {data, error} = await sb.from("linguas_progress").select("state, updated_at").eq("user_id", USER.id).maybeSingle();
-    if(!error && data && data.state && Object.keys(data.state).length){
-      const cloudTs = data.state._ts || new Date(data.updated_at).getTime();
-      if(!S._ts || cloudTs >= S._ts) S = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_STATE)), data.state);
+    if(error) loadErr = true;
+    else{
+      cloudLoaded = true;
+      if(data && data.state && Object.keys(data.state).length) cloud = data.state;
     }
-    SYNC = "ok";
-  }catch(e){ SYNC = "offline"; }
-  save();
+  }catch(e){ loadErr = true; }
+  if(loadErr){
+    // NUNCA publica por cima da nuvem sem antes conseguir ler — evita perda de progresso
+    SYNC = "offline";
+    setTimeout(retryCloudLoad, 8000);
+  }else{
+    if(cloud) S = mergeStates(S, cloud);
+    else{
+      // primeiro login desta conta: adota o progresso pré-login deste aparelho (uma única vez)
+      try{
+        const leg = JSON.parse(localStorage.getItem("inglesTurbo"));
+        if(leg){ S = mergeStates(S, leg); localStorage.removeItem("inglesTurbo"); }
+      }catch(e){}
+    }
+    SYNC = "ok"; cloudDirty = true;
+    clearTimeout(cloudTimer); cloudTimer = setTimeout(flushCloud, 800);
+  }
+  persistLocal();
+  APP_READY = true;
   document.getElementById("nav").style.display = "flex";
   TAB = "home"; LESSON = null; render();
 }
+async function retryCloudLoad(){
+  if(!sb || !USER || cloudLoaded) return;
+  try{
+    const {data, error} = await sb.from("linguas_progress").select("state, updated_at").eq("user_id", USER.id).maybeSingle();
+    if(error) throw error;
+    cloudLoaded = true;
+    if(data && data.state && Object.keys(data.state).length){
+      S = mergeStates(S, data.state); persistLocal();
+      if(TAB!=="lesson") render();
+    }
+    SYNC = "ok"; cloudDirty = true; flushCloud();
+  }catch(e){ setTimeout(retryCloudLoad, 10000); }
+  renderSync();
+}
 async function boot(){
   renderLoading();
-  if(!window.supabase){ renderLogin("Não consegui carregar o sistema. Verifique a internet e recarregue a página."); return; }
+  if(!window.supabase){ renderLogin("Não consegui carregar o sistema. Verifique a internet e recarregue a página (F5)."); return; }
   sb = window.supabase.createClient(SB_URL, SB_KEY);
+  sb.auth.onAuthStateChange((event, session)=>{
+    ACCESS_TOKEN = session ? session.access_token : null;
+    if(event === "SIGNED_OUT" && USER){
+      persistLocal();
+      USER = null; cloudLoaded = false; APP_READY = false; cloudDirty = false;
+      renderLogin("Sua sessão expirou. Entre novamente para continuar.");
+    }
+  });
   try{
     const {data:{session}} = await sb.auth.getSession();
     if(session) await enterApp(session); else renderLogin();
@@ -730,7 +838,10 @@ function speakList(items, rate, gapMs, onAll){ // toca uma lista em sequência
   }
   next();
 }
-function stopAudio(){ if("speechSynthesis" in window) speechSynthesis.cancel(); }
+function stopAudio(){
+  if("speechSynthesis" in window) speechSynthesis.cancel();
+  if(recog){ try{ recog.onresult=null; recog.onerror=null; recog.abort(); }catch(e){} recog=null; }
+}
 
 /* ---------- RECONHECIMENTO DE VOZ ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -832,7 +943,11 @@ const GERMAN = [
  ["Gut, danke!","Bem, obrigado!","gút, dânke"],
  ["Schönen Tag noch!","Tenha um bom dia!","chânen ták norr"]
 ];
-function deVoice(){ const vs = speechSynthesis.getVoices(); return vs.find(v=>/de[-_]DE/i.test(v.lang)) || vs.find(v=>v.lang.toLowerCase().startsWith("de")) || null; }
+function deVoice(){
+  if(!("speechSynthesis" in window)) return null;
+  const vs = speechSynthesis.getVoices();
+  return vs.find(v=>/de[-_]DE/i.test(v.lang)) || vs.find(v=>v.lang.toLowerCase().startsWith("de")) || null;
+}
 function speakDe(text){
   if(!("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
@@ -842,6 +957,7 @@ function speakDe(text){
   speechSynthesis.speak(u);
 }
 function playAllGerman(){
+  if(!("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
   let i = 0;
   function next(){
@@ -1041,20 +1157,23 @@ function blockShadow(){
 }
 function shadowNav(dir){ stopAudio(); LESSON.i=Math.max(0, LESSON.i+dir); render(); }
 function micTest(){
-  const L=LESSON; const p=L.day.p[L.i];
+  const L=LESSON; const idx=L.i; const day=L.day; const w=L.w, d=L.d; const p=day.p[idx];
   const micEl=()=>document.getElementById("mic");
   if(!SR){
-    micEl().innerHTML = `Reconhecimento de voz indisponível neste navegador (use Edge ou Chrome). Avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
+    const el=micEl(); if(el) el.innerHTML = `Reconhecimento de voz indisponível neste navegador (use Edge ou Chrome). Avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
     return;
   }
-  micEl().textContent = "🎤 Ouvindo... fale agora!";
+  const el=micEl(); if(el) el.textContent = "🎤 Ouvindo... fale agora!";
   listen(alts=>{
+    if(!LESSON || LESSON.day!==day) return; // saiu da lição no meio
     const sc = bestSimilarity(p[0], alts);
-    LESSON.shadowBest[L.i] = Math.max(LESSON.shadowBest[L.i]||0, sc);
-    S.shadowScores[phraseId(L.w,L.d,L.i)] = LESSON.shadowBest[L.i]; save();
-    render();
+    LESSON.shadowBest[idx] = Math.max(LESSON.shadowBest[idx]||0, sc);
+    S.shadowScores[phraseId(w,d,idx)] = LESSON.shadowBest[idx]; save();
+    if(LESSON.block===1 && LESSON.i===idx) render();
   }, err=>{
-    micEl().innerHTML = err==="not-allowed"
+    if(!LESSON || LESSON.day!==day) return;
+    const e2=micEl(); if(!e2) return;
+    e2.innerHTML = err==="not-allowed"
       ? "Permita o microfone no navegador para usar esta função."
       : `Não consegui ouvir (${err}). Tente de novo, ou avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
   });
@@ -1124,7 +1243,13 @@ function buildQuiz(){
   const qs = [];
   for(let i=0;i<n;i++){
     const p = pool[i];
-    const others = shuffle(PHRASES.filter(x=>x.id!==p.id)).slice(0,3);
+    // distratores sem colisão: nunca com o mesmo inglês OU português da resposta, nem repetidos entre si
+    const others = []; const seen = new Set([norm(p.en), norm(p.pt)]);
+    for(const x of shuffle(PHRASES)){
+      if(x.id===p.id || seen.has(norm(x.en)) || seen.has(norm(x.pt))) continue;
+      seen.add(norm(x.en)); seen.add(norm(x.pt)); others.push(x);
+      if(others.length===3) break;
+    }
     const type = (i%3===2) ? "audio" : (i%2===0 ? "pt2en" : "en2pt");
     let prompt, correct, opts;
     if(type==="pt2en"){ prompt = "Como se diz: “"+p.pt+"”"; correct=p.en; opts=shuffle([p.en, ...others.map(o=>o.en)]); }
@@ -1272,11 +1397,20 @@ function blockDialogShadow(){
   </div>`;
 }
 function micTestDialog(target){
+  const L=LESSON; const idx=L.i; const day=L.day;
   const micEl=()=>document.getElementById("mic");
-  if(!SR){ micEl().innerHTML=`Sem reconhecimento de voz aqui (use Edge/Chrome). Avalie: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`; return; }
-  micEl().textContent="🎤 Ouvindo... fale agora!";
-  listen(alts=>{ const sc=bestSimilarity(target,alts); LESSON.shadowBest[LESSON.i]=Math.max(LESSON.shadowBest[LESSON.i]||0,sc); render(); },
-    err=>{ micEl().innerHTML=`Não consegui ouvir (${err}). <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`; });
+  if(!SR){ const el=micEl(); if(el) el.innerHTML=`Sem reconhecimento de voz aqui (use Edge/Chrome). Avalie: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`; return; }
+  const el=micEl(); if(el) el.textContent="🎤 Ouvindo... fale agora!";
+  listen(alts=>{
+    if(!LESSON || LESSON.day!==day) return;
+    const sc=bestSimilarity(target,alts);
+    LESSON.shadowBest[idx]=Math.max(LESSON.shadowBest[idx]||0,sc);
+    if(LESSON.block===1 && LESSON.i===idx) render();
+  }, err=>{
+    if(!LESSON || LESSON.day!==day) return;
+    const e2=micEl(); if(!e2) return;
+    e2.innerHTML=`Não consegui ouvir (${err}). <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
+  });
 }
 function blockFinal(){
   const L=LESSON;
@@ -1434,9 +1568,12 @@ function viewProgress(){
 }
 async function resetAll(){
   if(!confirm("Apagar TODO o seu progresso? Isso não afeta os outros usuários.")) return;
+  const empty = blank(); empty._ts = Date.now(); empty.resetAt = empty._ts; // tombstone: impede o progresso antigo de "ressuscitar" no merge
+  try{
+    const {error} = await sb.from("linguas_progress").upsert({user_id: USER.id, state: empty, updated_at: new Date().toISOString()});
+    if(error) throw error;
+  }catch(e){ alert("Não consegui resetar na nuvem. Verifique a internet e tente de novo."); return; }
   try{ localStorage.removeItem(LS_KEY); localStorage.removeItem("inglesTurbo"); }catch(e){}
-  S = JSON.parse(JSON.stringify(DEFAULT_STATE));
-  try{ await sb.from("linguas_progress").upsert({user_id: USER.id, state: S, updated_at: new Date().toISOString()}); }catch(e){}
   location.reload();
 }
 
@@ -1512,7 +1649,7 @@ function render(){
   maybeAutoAudio();
 }
 boot();
-setTimeout(()=>{ if(USER) render(); }, 900); // re-render após vozes carregarem
+setTimeout(()=>{ if(APP_READY && TAB!=="lesson") render(); }, 1200); // re-render após vozes carregarem
 </script>
 </body>
 </html>
