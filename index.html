@@ -840,22 +840,35 @@ function speakList(items, rate, gapMs, onAll){ // toca uma lista em sequência
 }
 function stopAudio(){
   if("speechSynthesis" in window) speechSynthesis.cancel();
-  if(recog){ try{ recog.onresult=null; recog.onerror=null; recog.abort(); }catch(e){} recog=null; }
+  killRecog();
 }
 
 /* ---------- RECONHECIMENTO DE VOZ ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recog = null;
+let recog = null, recogGen = 0, MIC_FAILS = 0;
+function killRecog(){
+  if(recog){ try{ recog.onresult=null; recog.onerror=null; recog.onend=null; recog.abort(); }catch(e){} recog=null; }
+}
 function listen(onResult, onErr){
   if(!SR){ onErr("no-support"); return; }
+  killRecog();                                    // clique duplo no 🎤 não gera mais "aborted"
+  if("speechSynthesis" in window) speechSynthesis.cancel(); // TTS falando atrapalha a captura
+  const gen = ++recogGen;
   try{
     recog = new SR(); recog.lang = "en-US"; recog.interimResults = false; recog.maxAlternatives = 3;
-    recog.onresult = e => { const alts=[]; for(const r of e.results[0]) alts.push(r.transcript); onResult(alts); };
-    recog.onerror = e => onErr(e.error);
-    recog.onend = ()=>{};
+    recog.onresult = e => { if(gen!==recogGen) return; MIC_FAILS = 0; const alts=[]; for(const r of e.results[0]) alts.push(r.transcript); onResult(alts); };
+    recog.onerror = e => { if(gen!==recogGen) return; onErr(e.error); };
     recog.start();
   }catch(e){ onErr("error"); }
 }
+function micFailHtml(err){
+  MIC_FAILS++;
+  const dica = (err==="aborted"||err==="network"||err==="service-not-allowed")
+    ? "O serviço de reconhecimento do seu navegador falhou — isso é comum no <b>Edge</b>. Para a nota automática de pronúncia, use o <b>Chrome</b>. Por enquanto, avalie você mesmo:"
+    : `Não consegui ouvir (${esc(String(err))}). Tente de novo, ou avalie você mesmo:`;
+  return `${dica} <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
+}
+const SELF_EVAL_HTML = `Como você se saiu falando em voz alta? <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
 function norm(s){ return s.toLowerCase().replace(/["""'''.,!?;:()-]/g," ").replace(/\s+/g," ").trim(); }
 function lev(a,b){
   const m=a.length, n=b.length; if(!m) return n; if(!n) return m;
@@ -1133,7 +1146,7 @@ function blockShadow(){
   const best = L.shadowBest[L.i];
   return lessonHeader()+`
   <div class="card card2"><b>Shadowing (10-15 min):</b>
-   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque 🎤 e fale — o app dá uma nota na sua pronúncia. Meta: 70%+ em cada frase.</div></div>
+   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque 🎤 e fale — o app dá uma nota na sua pronúncia. Meta: 70%+ em cada frase. <b>A nota automática funciona melhor no Chrome</b>; se o microfone falhar, use a autoavaliação que aparece — o que treina é falar alto, não a nota.</div></div>
   <div class="card center">
     <div class="dim mb">Frase ${L.i+1} de ${ps.length}</div>
     <div class="en" style="font-size:1.35em;">${esc(p[0])}</div>
@@ -1159,8 +1172,8 @@ function shadowNav(dir){ stopAudio(); LESSON.i=Math.max(0, LESSON.i+dir); render
 function micTest(){
   const L=LESSON; const idx=L.i; const day=L.day; const w=L.w, d=L.d; const p=day.p[idx];
   const micEl=()=>document.getElementById("mic");
-  if(!SR){
-    const el=micEl(); if(el) el.innerHTML = `Reconhecimento de voz indisponível neste navegador (use Edge ou Chrome). Avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
+  if(!SR || MIC_FAILS>=2){ // sem suporte ou falhando seguido: vai direto para autoavaliação
+    const el=micEl(); if(el) el.innerHTML = SELF_EVAL_HTML;
     return;
   }
   const el=micEl(); if(el) el.textContent = "🎤 Ouvindo... fale agora!";
@@ -1175,7 +1188,7 @@ function micTest(){
     const e2=micEl(); if(!e2) return;
     e2.innerHTML = err==="not-allowed"
       ? "Permita o microfone no navegador para usar esta função."
-      : `Não consegui ouvir (${err}). Tente de novo, ou avalie você mesmo: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
+      : micFailHtml(err);
   });
 }
 function selfGrade(sc){ LESSON.shadowBest[LESSON.i]=sc; render(); }
@@ -1399,7 +1412,7 @@ function blockDialogShadow(){
 function micTestDialog(target){
   const L=LESSON; const idx=L.i; const day=L.day;
   const micEl=()=>document.getElementById("mic");
-  if(!SR){ const el=micEl(); if(el) el.innerHTML=`Sem reconhecimento de voz aqui (use Edge/Chrome). Avalie: <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`; return; }
+  if(!SR || MIC_FAILS>=2){ const el=micEl(); if(el) el.innerHTML = SELF_EVAL_HTML; return; }
   const el=micEl(); if(el) el.textContent="🎤 Ouvindo... fale agora!";
   listen(alts=>{
     if(!LESSON || LESSON.day!==day) return;
@@ -1409,7 +1422,9 @@ function micTestDialog(target){
   }, err=>{
     if(!LESSON || LESSON.day!==day) return;
     const e2=micEl(); if(!e2) return;
-    e2.innerHTML=`Não consegui ouvir (${err}). <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
+    e2.innerHTML = err==="not-allowed"
+      ? "Permita o microfone no navegador para usar esta função."
+      : micFailHtml(err);
   });
 }
 function blockFinal(){
