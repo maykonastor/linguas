@@ -861,14 +861,23 @@ function listen(onResult, onErr){
     recog.start();
   }catch(e){ onErr("error"); }
 }
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 function micFailHtml(err){
   MIC_FAILS++;
-  const dica = (err==="aborted"||err==="network"||err==="service-not-allowed")
-    ? "O serviço de reconhecimento do seu navegador falhou — isso é comum no <b>Edge</b>. Para a nota automática de pronúncia, use o <b>Chrome</b>. Por enquanto, avalie você mesmo:"
-    : `Não consegui ouvir (${esc(String(err))}). Tente de novo, ou avalie você mesmo:`;
+  let dica;
+  if(err==="aborted"||err==="network"||err==="service-not-allowed"){
+    dica = IS_IOS
+      ? "O reconhecimento falhou. No iPhone, use o <b>Safari</b> e ative o Ditado (Ajustes → Geral → Teclado → Ativar Ditado). Por enquanto, avalie você mesmo:"
+      : "O serviço de reconhecimento do seu navegador falhou — isso é comum no <b>Edge</b>. Para a nota automática de pronúncia, use o <b>Chrome</b>. Por enquanto, avalie você mesmo:";
+  } else {
+    dica = `Não consegui ouvir (${esc(String(err))}). Tente de novo, ou avalie você mesmo:`;
+  }
   return `${dica} <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
 }
 const SELF_EVAL_HTML = `Como você se saiu falando em voz alta? <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
+const MIC_BTN = () => SR && MIC_FAILS<2 ? "🎤 Falar" : "📝 Autoavaliar";
+const MIC_NOTE = () => (SR && MIC_FAILS<2) ? "" :
+  `<div class="dim mt" style="font-size:.75em;">💡 Nota automática de pronúncia indisponível aqui — no <b>iPhone use o Safari</b>; no computador/Android, o <b>Chrome</b>. A autoavaliação treina igual: o que importa é falar em voz alta.</div>`;
 function norm(s){ return s.toLowerCase().replace(/["""'''.,!?;:()-]/g," ").replace(/\s+/g," ").trim(); }
 function lev(a,b){
   const m=a.length, n=b.length; if(!m) return n; if(!n) return m;
@@ -1146,7 +1155,7 @@ function blockShadow(){
   const best = L.shadowBest[L.i];
   return lessonHeader()+`
   <div class="card card2"><b>Shadowing (10-15 min):</b>
-   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque 🎤 e fale — o app dá uma nota na sua pronúncia. Meta: 70%+ em cada frase. <b>A nota automática funciona melhor no Chrome</b>; se o microfone falhar, use a autoavaliação que aparece — o que treina é falar alto, não a nota.</div></div>
+   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque 🎤 e fale — o app dá uma nota na sua pronúncia. Meta: 70%+ em cada frase. <b>A nota automática funciona no Chrome (PC/Android) e no Safari (iPhone)</b>; em outros navegadores, use a autoavaliação — o que treina é falar alto, não a nota.</div></div>
   <div class="card center">
     <div class="dim mb">Frase ${L.i+1} de ${ps.length}</div>
     <div class="en" style="font-size:1.35em;">${esc(p[0])}</div>
@@ -1155,9 +1164,10 @@ function blockShadow(){
     <div class="row mt" style="justify-content:center;">
       <button class="btn" onclick="speak(${JSON.stringify(p[0]).replace(/"/g,"&quot;")}, S.slowRate)">🐢 Devagar</button>
       <button class="btn" onclick="speak(${JSON.stringify(p[0]).replace(/"/g,"&quot;")})">▶ Normal</button>
-      <button class="btn warn" onclick="micTest()">🎤 Falar</button>
+      <button class="btn warn" onclick="micTest()">${MIC_BTN()}</button>
     </div>
     <div class="mic-status mt" id="mic"></div>
+    ${MIC_NOTE()}
     <div id="micScore">${best!==undefined?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div><div class="dim">${best>=70?"Excelente! Pode avançar.":"Ouça de novo e tente mais uma vez."}</div>`:""}</div>
   </div>
   <div class="row">
@@ -1398,9 +1408,10 @@ function blockDialogShadow(){
     <div class="row mt" style="justify-content:center;">
       <button class="btn" onclick="speak(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")}, S.slowRate)">🐢 Devagar</button>
       <button class="btn" onclick="speak(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">▶ Normal</button>
-      <button class="btn warn" onclick="micTestDialog(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">🎤 Falar</button>
+      <button class="btn warn" onclick="micTestDialog(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">${MIC_BTN()}</button>
     </div>
     <div class="mic-status mt" id="mic"></div>
+    ${MIC_NOTE()}
     <div id="micScore">${best!==undefined?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div>`:""}</div>
   </div>
   <div class="row">
