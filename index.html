@@ -854,7 +854,7 @@ const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const REC = { state:"idle", url:null, buffer:null, pcm:null, score:null, text:"", err:"", secs:0, rms:0 };
 let micStream=null, micRec=null, micChunks=[], micCtx=null, micAnalyser=null, micRaf=null,
-    micTimer=null, micAutoStop=null, playSrc=null, REC_TARGET="";
+    micTimer=null, micAutoStop=null, playSrc=null, REC_TARGET="", micGen=0;
 
 function recSupported(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -866,9 +866,25 @@ function recMime(){
   return "";
 }
 function audioCtx(){
+  if(micCtx && micCtx.state === "closed") micCtx = null;
   if(!micCtx){ const C = window.AudioContext || window.webkitAudioContext; if(C) micCtx = new C(); }
   if(micCtx && micCtx.state === "suspended") micCtx.resume();  // desbloqueia áudio no iOS
   return micCtx;
+}
+/* Reprodução por elemento <audio>: no iPhone é o caminho que sai pelo alto-falante
+   e o único que continua funcionando depois de uma sessão de microfone. */
+let audioTag = null;
+function getAudioTag(){
+  if(!audioTag){
+    audioTag = new Audio();
+    audioTag.setAttribute("playsinline","");
+    audioTag.preload = "auto";
+  }
+  return audioTag;
+}
+function unlockAudioTag(){         // chamado dentro de um toque real do usuário
+  const a = getAudioTag();
+  if(!a.src){ try{ a.play().catch(()=>{}); a.pause(); }catch(e){} }
 }
 function resetRec(){
   if(REC.url){ try{ URL.revokeObjectURL(REC.url); }catch(e){} }
@@ -876,12 +892,16 @@ function resetRec(){
   REC.url=null; REC.buffer=null; REC.pcm=null; REC.score=null; REC.text=""; REC.err=""; REC.secs=0; REC.rms=0;
 }
 function releaseMic(){
-  clearInterval(micTimer); clearTimeout(micAutoStop); cancelAnimationFrame(micRaf);
+  clearInterval(micTimer); clearTimeout(micAutoStop); clearInterval(micRaf);
   micTimer=micAutoStop=micRaf=null;
   if(micStream){ try{ micStream.getTracks().forEach(t=>t.stop()); }catch(e){} micStream=null; }
   micAnalyser=null;
+  // ESSENCIAL no iPhone: enquanto o AudioContext de captura vive, o iOS manda
+  // o som para o auricular (volume mínimo). Fechando, o áudio volta ao alto-falante.
+  if(micCtx){ try{ micCtx.close(); }catch(e){} micCtx=null; }
 }
 function abortRec(){
+  micGen++;
   if(micRec && micRec.state === "recording"){ try{ micRec.onstop=null; micRec.stop(); }catch(e){} }
   micRec=null; releaseMic();
   if(playSrc){ try{ playSrc.stop(); }catch(e){} playSrc=null; }
@@ -898,7 +918,7 @@ async function startRec(target){
     REC.err = "O microfone só funciona em conexão segura (https).";
     render(); return;
   }
-  stopAudio(); resetRec(); audioCtx();
+  stopAudio(); resetRec(); audioCtx(); unlockAudioTag();   // libera o áudio do iOS neste toque
   REC.state = "recording"; REC.secs = 0; render();
   try{
     micStream = await navigator.mediaDevices.getUserMedia({
@@ -915,7 +935,7 @@ async function startRec(target){
                              : "Não consegui abrir o microfone. Feche outros apps que possam estar usando-o.");
     render(); return;
   }
-  // medidor de volume: mostra que ESTÁ capturando
+  // medidor de volume + parada automática por tempo real (não por frames)
   try{
     const ctx = audioCtx();
     if(ctx){
@@ -923,18 +943,27 @@ async function startRec(target){
       micAnalyser = ctx.createAnalyser(); micAnalyser.fftSize = 512;
       src.connect(micAnalyser);
       const buf = new Uint8Array(micAnalyser.frequencyBinCount);
-      let quiet = 0, spoke = false;
-      const tick = ()=>{
-        if(!micAnalyser) return;
+      const t0 = performance.now();
+      const gen = ++micGen;      // um loop antigo NUNCA pode parar a gravação nova
+      let nSum = 0, nCount = 0, th = 0.11, voiced = 0, lastVoice = 0;
+      // setInterval (e não requestAnimationFrame): o rAF congela quando a aba sai
+      // do primeiro plano — no iPhone isso deixava a gravação presa até o limite.
+      micRaf = setInterval(()=>{
+        if(gen !== micGen || !micAnalyser) return;
         micAnalyser.getByteTimeDomainData(buf);
         let peak = 0; for(let i=0;i<buf.length;i++){ const v = Math.abs(buf[i]-128)/128; if(v>peak) peak=v; }
+        const now = performance.now(), elapsed = now - t0;
         const bar = document.getElementById("lvl");
         if(bar) bar.style.width = Math.min(100, Math.round(peak*260)) + "%";
-        if(peak > 0.06){ spoke = true; quiet = 0; } else if(spoke){ quiet++; }
-        if(spoke && quiet > 55 && REC.secs >= 1) stopRec();   // ~1s de silêncio após falar
-        micRaf = requestAnimationFrame(tick);
-      };
-      tick();
+        if(elapsed < 500){                        // 0,5s medindo o ruído do ambiente
+          nSum += peak; nCount++;                 // média (um estalo isolado não distorce)
+        }else{
+          if(nCount){ th = Math.min(0.35, Math.max(0.11, (nSum/nCount) * 2.5)); nCount = 0; }
+          if(peak > th){ voiced++; lastVoice = now; }
+          // encerra só com fala CONFIRMADA + 1,4s de silêncio + 2,5s mínimos gravados
+          if(voiced >= 5 && lastVoice && (now - lastVoice) > 1400 && elapsed > 2500) stopRec();
+        }
+      }, 50);
     }
   }catch(e){}
   try{
@@ -954,7 +983,8 @@ async function startRec(target){
   }
 }
 function stopRec(){
-  clearTimeout(micAutoStop); clearInterval(micTimer); cancelAnimationFrame(micRaf); micRaf=null;
+  clearTimeout(micAutoStop); clearInterval(micTimer); clearInterval(micRaf); micRaf=null;
+  micGen++;                       // invalida o loop de análise desta gravação
   if(micRec && micRec.state === "recording"){ try{ micRec.stop(); }catch(e){} }
 }
 async function onRecStop(){
@@ -969,12 +999,16 @@ async function onRecStop(){
   else { REC.state = "done"; render(); }
 }
 async function decodeRec(blob){
-  const ctx = audioCtx(); if(!ctx) return;
-  const ab = await blob.arrayBuffer();
-  const decoded = await new Promise((res, rej)=>{
-    const p = ctx.decodeAudioData(ab, res, rej);      // forma com callback: compatível com Safari antigo
-    if(p && p.then) p.then(res, rej);
-  });
+  const C = window.AudioContext || window.webkitAudioContext; if(!C) return;
+  const ctx = new C();   // contexto descartável: não pode reativar a rota do auricular no iOS
+  let decoded;
+  try{
+    const ab = await blob.arrayBuffer();
+    decoded = await new Promise((res, rej)=>{
+      const p = ctx.decodeAudioData(ab, res, rej);    // forma com callback: compatível com Safari antigo
+      if(p && p.then) p.then(res, rej);
+    });
+  } finally { try{ ctx.close(); }catch(e){} }
   REC.buffer = decoded;
   // reamostra para 16 kHz mono (formato que o Whisper espera)
   const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -990,16 +1024,26 @@ async function decodeRec(blob){
   REC.rms = REC.pcm.length ? Math.sqrt(sum/REC.pcm.length) : 0;   // volume real: separa fala de silêncio
 }
 function playMine(){
-  const ctx = audioCtx();
-  if(playSrc){ try{ playSrc.stop(); }catch(e){} playSrc=null; }
-  if(ctx && REC.buffer){
-    const s = ctx.createBufferSource(); s.buffer = REC.buffer; s.connect(ctx.destination); s.start();
-    playSrc = s; return;
-  }
-  if(REC.url){ const a = new Audio(REC.url); a.play().catch(()=>{}); }   // reserva
+  if(!REC.url) return;
+  if("speechSynthesis" in window) speechSynthesis.cancel();
+  const a = getAudioTag();
+  try{
+    if(a.src !== REC.url){ a.src = REC.url; }
+    a.currentTime = 0;
+    const p = a.play();
+    if(p && p.catch) p.catch(()=>{           // reserva: Web Audio se o elemento for bloqueado
+      const ctx = audioCtx();
+      if(ctx && REC.buffer){
+        if(playSrc){ try{ playSrc.stop(); }catch(e){} }
+        const s = ctx.createBufferSource(); s.buffer = REC.buffer; s.connect(ctx.destination); s.start(); playSrc = s;
+      }
+    });
+  }catch(e){}
 }
 function playCompare(target){
   stopAudio();
+  unlockAudioTag();                       // libera o áudio no iOS ainda dentro do toque
+  const a = getAudioTag(); if(REC.url && a.src !== REC.url) a.src = REC.url;
   speak(target, S.rate, ()=> setTimeout(playMine, 450));   // nativo → você
 }
 
@@ -1082,12 +1126,15 @@ function micPanel(target){
         <button class="btn small ghost" onclick="playCompare(${t})">🔁 Nativo → você</button>
         <button class="btn small warn" onclick="startRec(${t})">🎤 De novo</button>
       </div>`;
+    const dur = REC.pcm ? (REC.pcm.length/16000) : 0;
+    if(dur && dur < 1.6)
+      html += `<div class="dim mt" style="color:var(--warn);font-size:.8em;">⚠️ Gravou só ${dur.toFixed(1)}s — comece a falar logo após tocar em Gravar.</div>`;
     if(REC.score !== null && REC.score !== undefined){
       const c = REC.score>=70 ? "var(--acc2)" : "var(--warn)";
       html += `<div class="center mt"><div class="score-big" style="color:${c}">${REC.score}%</div>
         <div class="dim">Ouvi: “${esc(REC.text)}”</div>
         <div class="dim">${REC.score>=90?"Perfeito! 🏆":REC.score>=70?"Muito bom — pode avançar. ✅":"Ouça o nativo e a sua gravação lado a lado e tente de novo. 💪"}</div></div>`;
-    }else if(ASR.status !== "ready"){
+    }else if(ASR.status !== "ready" && ASR.status !== "loading"){
       html += `<div class="dim center mt" style="font-size:.85em;">Compare sua voz com a do nativo e avalie:
         <div class="row mt" style="justify-content:center;">
           <button class="btn small green" onclick="selfGrade(85)">Falei bem</button>
@@ -1096,13 +1143,20 @@ function micPanel(target){
     }
     html += `</div>`;
   }
-  // linha de status do Whisper
+  // ativação do avaliador — visível de verdade
   if(ASR.status === "loading"){
-    html += `<div class="dim mt" style="font-size:.78em;">⏬ Baixando o avaliador de pronúncia... <b id="asrpct">${ASR.pct||0}%</b> (só desta vez)</div>`;
-  }else if(ASR.status === "off" && REC.state !== "recording"){
-    html += `<div class="dim mt" style="font-size:.78em;">💡 <a href="#" onclick="event.preventDefault();enableASR()" style="color:var(--acc);">Ativar nota automática de pronúncia</a> — baixa 40 MB uma única vez e depois funciona até sem internet, em qualquer navegador.</div>`;
+    html += `<div class="card2" style="border-radius:12px;padding:12px;margin-top:10px;">
+      <div class="dim center">⏬ Baixando o avaliador de pronúncia (só desta vez): <b id="asrpct">${ASR.pct||0}%</b></div>
+      <div class="prog" style="height:8px;"><div style="width:${ASR.pct||0}%"></div></div></div>`;
+  }else if(ASR.status === "off"){
+    html += `<div class="card2" style="border-radius:12px;padding:12px;margin-top:10px;">
+      <div class="dim center mb">🎯 Quer a <b>nota automática</b> da sua pronúncia?</div>
+      <button class="btn green full" onclick="enableASR()">Ativar avaliador de pronúncia</button>
+      <div class="dim center mt" style="font-size:.75em;">Baixa 40 MB uma única vez. Depois funciona sempre, até sem internet.</div></div>`;
   }else if(ASR.status === "error"){
-    html += `<div class="dim mt" style="font-size:.78em;color:var(--warn);">Não consegui carregar o avaliador (${esc(ASR.err.slice(0,60))}). <a href="#" onclick="event.preventDefault();ASR.status='off';render()" style="color:var(--acc);">Tentar de novo</a></div>`;
+    html += `<div class="card2" style="border-radius:12px;padding:12px;margin-top:10px;">
+      <div class="dim" style="color:var(--warn);">Não consegui carregar o avaliador (${esc(ASR.err.slice(0,60))}).</div>
+      <button class="btn small full mt" onclick="ASR.status='off';render()">Tentar de novo</button></div>`;
   }
   return html;
 }
