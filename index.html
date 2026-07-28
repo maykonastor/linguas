@@ -747,6 +747,7 @@ async function enterApp(session){
   APP_READY = true;
   document.getElementById("nav").style.display = "flex";
   TAB = "home"; LESSON = null; render();
+  if(asrWanted()) enableASR();   // já ativou antes neste aparelho: carrega do cache
 }
 async function retryCloudLoad(){
   if(!sb || !USER || cloudLoaded) return;
@@ -840,44 +841,271 @@ function speakList(items, rate, gapMs, onAll){ // toca uma lista em sequência
 }
 function stopAudio(){
   if("speechSynthesis" in window) speechSynthesis.cancel();
-  killRecog();
+  abortRec();
 }
 
-/* ---------- RECONHECIMENTO DE VOZ ---------- */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recog = null, recogGen = 0, MIC_FAILS = 0;
-function killRecog(){
-  if(recog){ try{ recog.onresult=null; recog.onerror=null; recog.onend=null; recog.abort(); }catch(e){} recog=null; }
+/* ============================================================
+   MOTOR DE VOZ PRÓPRIO — grava de verdade em qualquer navegador
+   (inclusive Chrome/Safari do iPhone) e pontua a pronúncia com
+   Whisper rodando DENTRO do navegador. Sem Web Speech API,
+   sem servidor, sem custo. Depois do 1º download funciona offline.
+   ============================================================ */
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+               (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const REC = { state:"idle", url:null, buffer:null, pcm:null, score:null, text:"", err:"", secs:0, rms:0 };
+let micStream=null, micRec=null, micChunks=[], micCtx=null, micAnalyser=null, micRaf=null,
+    micTimer=null, micAutoStop=null, playSrc=null, REC_TARGET="";
+
+function recSupported(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 }
-function listen(onResult, onErr){
-  if(!SR){ onErr("no-support"); return; }
-  killRecog();                                    // clique duplo no 🎤 não gera mais "aborted"
-  if("speechSynthesis" in window) speechSynthesis.cancel(); // TTS falando atrapalha a captura
-  const gen = ++recogGen;
-  try{
-    recog = new SR(); recog.lang = "en-US"; recog.interimResults = false; recog.maxAlternatives = 3;
-    recog.onresult = e => { if(gen!==recogGen) return; MIC_FAILS = 0; const alts=[]; for(const r of e.results[0]) alts.push(r.transcript); onResult(alts); };
-    recog.onerror = e => { if(gen!==recogGen) return; onErr(e.error); };
-    recog.start();
-  }catch(e){ onErr("error"); }
+function recMime(){
+  const list = ["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/aac","audio/ogg;codecs=opus"];
+  if(window.MediaRecorder && MediaRecorder.isTypeSupported)
+    for(const m of list){ if(MediaRecorder.isTypeSupported(m)) return m; }
+  return "";
 }
-const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-function micFailHtml(err){
-  MIC_FAILS++;
-  let dica;
-  if(err==="aborted"||err==="network"||err==="service-not-allowed"){
-    dica = IS_IOS
-      ? "O reconhecimento falhou. No iPhone, use o <b>Safari</b> e ative o Ditado (Ajustes → Geral → Teclado → Ativar Ditado). Por enquanto, avalie você mesmo:"
-      : "O serviço de reconhecimento do seu navegador falhou — isso é comum no <b>Edge</b>. Para a nota automática de pronúncia, use o <b>Chrome</b>. Por enquanto, avalie você mesmo:";
-  } else {
-    dica = `Não consegui ouvir (${esc(String(err))}). Tente de novo, ou avalie você mesmo:`;
+function audioCtx(){
+  if(!micCtx){ const C = window.AudioContext || window.webkitAudioContext; if(C) micCtx = new C(); }
+  if(micCtx && micCtx.state === "suspended") micCtx.resume();  // desbloqueia áudio no iOS
+  return micCtx;
+}
+function resetRec(){
+  if(REC.url){ try{ URL.revokeObjectURL(REC.url); }catch(e){} }
+  REC.state="idle";  // sem isto o botão "Gravar" some ao ir para a próxima frase
+  REC.url=null; REC.buffer=null; REC.pcm=null; REC.score=null; REC.text=""; REC.err=""; REC.secs=0; REC.rms=0;
+}
+function releaseMic(){
+  clearInterval(micTimer); clearTimeout(micAutoStop); cancelAnimationFrame(micRaf);
+  micTimer=micAutoStop=micRaf=null;
+  if(micStream){ try{ micStream.getTracks().forEach(t=>t.stop()); }catch(e){} micStream=null; }
+  micAnalyser=null;
+}
+function abortRec(){
+  if(micRec && micRec.state === "recording"){ try{ micRec.onstop=null; micRec.stop(); }catch(e){} }
+  micRec=null; releaseMic();
+  if(playSrc){ try{ playSrc.stop(); }catch(e){} playSrc=null; }
+  if(REC.state==="recording"||REC.state==="processing") REC.state="idle";
+}
+
+async function startRec(target){
+  REC_TARGET = target || "";
+  if(!recSupported()){
+    REC.err = "Este navegador não grava áudio. No iPhone use o <b>Safari</b>; no computador, o <b>Chrome</b>.";
+    render(); return;
   }
-  return `${dica} <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Repetir</button>`;
+  if(!window.isSecureContext){
+    REC.err = "O microfone só funciona em conexão segura (https).";
+    render(); return;
+  }
+  stopAudio(); resetRec(); audioCtx();
+  REC.state = "recording"; REC.secs = 0; render();
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }
+    });
+  }catch(e){
+    REC.state = "idle";
+    const n = e && e.name;
+    REC.err = (n==="NotAllowedError" || n==="SecurityError")
+      ? (IS_IOS
+          ? "Permissão negada. No iPhone: toque em <b>AA</b> na barra de endereço → <b>Definições do site</b> → <b>Microfone: Permitir</b>. Depois toque em Gravar de novo."
+          : "Permissão negada. Clique no <b>cadeado 🔒</b> ao lado do endereço → <b>Microfone: Permitir</b>, e tente de novo.")
+      : (n==="NotFoundError" ? "Nenhum microfone encontrado neste aparelho."
+                             : "Não consegui abrir o microfone. Feche outros apps que possam estar usando-o.");
+    render(); return;
+  }
+  // medidor de volume: mostra que ESTÁ capturando
+  try{
+    const ctx = audioCtx();
+    if(ctx){
+      const src = ctx.createMediaStreamSource(micStream);
+      micAnalyser = ctx.createAnalyser(); micAnalyser.fftSize = 512;
+      src.connect(micAnalyser);
+      const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+      let quiet = 0, spoke = false;
+      const tick = ()=>{
+        if(!micAnalyser) return;
+        micAnalyser.getByteTimeDomainData(buf);
+        let peak = 0; for(let i=0;i<buf.length;i++){ const v = Math.abs(buf[i]-128)/128; if(v>peak) peak=v; }
+        const bar = document.getElementById("lvl");
+        if(bar) bar.style.width = Math.min(100, Math.round(peak*260)) + "%";
+        if(peak > 0.06){ spoke = true; quiet = 0; } else if(spoke){ quiet++; }
+        if(spoke && quiet > 55 && REC.secs >= 1) stopRec();   // ~1s de silêncio após falar
+        micRaf = requestAnimationFrame(tick);
+      };
+      tick();
+    }
+  }catch(e){}
+  try{
+    const mt = recMime();
+    micChunks = [];
+    micRec = mt ? new MediaRecorder(micStream, {mimeType: mt}) : new MediaRecorder(micStream);
+    micRec.ondataavailable = e => { if(e.data && e.data.size) micChunks.push(e.data); };
+    micRec.onstop = onRecStop;
+    micRec.start();
+    micTimer = setInterval(()=>{
+      REC.secs++;
+      const t = document.getElementById("rectime"); if(t) t.textContent = REC.secs + "s";
+    }, 1000);
+    micAutoStop = setTimeout(stopRec, 12000); // trava de segurança
+  }catch(e){
+    REC.state="idle"; REC.err = "Falha ao iniciar a gravação neste navegador."; releaseMic(); render();
+  }
 }
-const SELF_EVAL_HTML = `Como você se saiu falando em voz alta? <button class="btn small green" onclick="selfGrade(85)">Falei bem</button> <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>`;
-const MIC_BTN = () => SR && MIC_FAILS<2 ? "🎤 Falar" : "📝 Autoavaliar";
-const MIC_NOTE = () => (SR && MIC_FAILS<2) ? "" :
-  `<div class="dim mt" style="font-size:.75em;">💡 Nota automática de pronúncia indisponível aqui — no <b>iPhone use o Safari</b>; no computador/Android, o <b>Chrome</b>. A autoavaliação treina igual: o que importa é falar em voz alta.</div>`;
+function stopRec(){
+  clearTimeout(micAutoStop); clearInterval(micTimer); cancelAnimationFrame(micRaf); micRaf=null;
+  if(micRec && micRec.state === "recording"){ try{ micRec.stop(); }catch(e){} }
+}
+async function onRecStop(){
+  const blob = new Blob(micChunks, {type: (micRec && micRec.mimeType) || "audio/webm"});
+  releaseMic();
+  if(!blob.size){ REC.state="idle"; REC.err="Não gravou nada. Verifique a permissão do microfone."; render(); return; }
+  REC.url = URL.createObjectURL(blob);
+  REC.state = ASR.status==="ready" ? "processing" : "done";
+  render();
+  try{ await decodeRec(blob); }catch(e){}
+  if(ASR.status === "ready") await scoreRec();
+  else { REC.state = "done"; render(); }
+}
+async function decodeRec(blob){
+  const ctx = audioCtx(); if(!ctx) return;
+  const ab = await blob.arrayBuffer();
+  const decoded = await new Promise((res, rej)=>{
+    const p = ctx.decodeAudioData(ab, res, rej);      // forma com callback: compatível com Safari antigo
+    if(p && p.then) p.then(res, rej);
+  });
+  REC.buffer = decoded;
+  // reamostra para 16 kHz mono (formato que o Whisper espera)
+  const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if(!OC) return;
+  const len = Math.max(1, Math.ceil(decoded.duration * 16000));
+  const off = new OC(1, len, 16000);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const out = await new Promise((res, rej)=>{
+    const p = off.startRendering(); if(p && p.then) p.then(res, rej); else off.oncomplete = e => res(e.renderedBuffer);
+  });
+  REC.pcm = out.getChannelData(0);
+  let sum = 0; for(let i=0;i<REC.pcm.length;i++) sum += REC.pcm[i]*REC.pcm[i];
+  REC.rms = REC.pcm.length ? Math.sqrt(sum/REC.pcm.length) : 0;   // volume real: separa fala de silêncio
+}
+function playMine(){
+  const ctx = audioCtx();
+  if(playSrc){ try{ playSrc.stop(); }catch(e){} playSrc=null; }
+  if(ctx && REC.buffer){
+    const s = ctx.createBufferSource(); s.buffer = REC.buffer; s.connect(ctx.destination); s.start();
+    playSrc = s; return;
+  }
+  if(REC.url){ const a = new Audio(REC.url); a.play().catch(()=>{}); }   // reserva
+}
+function playCompare(target){
+  stopAudio();
+  speak(target, S.rate, ()=> setTimeout(playMine, 450));   // nativo → você
+}
+
+/* ---------- WHISPER NO NAVEGADOR (nota automática, grátis) ---------- */
+const ASR = { status:"off", pipe:null, pct:0, err:"" };  // off | loading | ready | error
+function asrWanted(){ try{ return localStorage.getItem("asrOn")==="1"; }catch(e){ return false; } }
+function paintAsr(){
+  const el = document.getElementById("asrpct");
+  if(el) el.textContent = ASR.pct ? ASR.pct + "%" : "iniciando...";
+}
+async function enableASR(){
+  if(ASR.status==="loading" || ASR.status==="ready") return;
+  ASR.status="loading"; ASR.pct=0; ASR.err=""; render();
+  try{
+    const T = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+    T.env.allowLocalModels = false;
+    if(T.env.backends && T.env.backends.onnx && T.env.backends.onnx.wasm)
+      T.env.backends.onnx.wasm.numThreads = 1;  // Pages não envia COOP/COEP: single-thread
+    ASR.pipe = await T.pipeline("automatic-speech-recognition", "Xenova/whisper-tiny.en", {
+      quantized: true,
+      progress_callback: p => {
+        if(p && p.status==="progress" && p.total){ ASR.pct = Math.round(p.loaded/p.total*100); paintAsr(); }
+      }
+    });
+    ASR.status="ready"; try{ localStorage.setItem("asrOn","1"); }catch(e){}
+  }catch(e){
+    ASR.status="error"; ASR.err = String((e && e.message) || e);
+  }
+  render();
+}
+function disableASR(){ try{ localStorage.removeItem("asrOn"); }catch(e){} ASR.status="off"; ASR.pipe=null; render(); }
+async function scoreRec(){
+  REC.state="processing"; render();
+  try{
+    if(!REC.pcm) throw new Error("sem áudio");
+    if(REC.rms < 0.012){   // gravação praticamente muda: o Whisper inventaria texto
+      REC.err = "Não ouvi sua voz. Fale mais perto do microfone e um pouco mais alto.";
+      REC.score = null; REC.state="done"; render(); return;
+    }
+    const out = await ASR.pipe(REC.pcm);
+    REC.text = String((out && out.text) || "").trim();
+    if(norm(REC.text).length < 2){ REC.err = "Não entendi o que você falou. Tente de novo, falando um pouco mais devagar."; REC.score = null; }
+    else{
+      REC.score = similarity(REC_TARGET, REC.text);
+      saveShadowScore(REC.score);
+    }
+  }catch(e){
+    REC.err = "Não consegui avaliar este áudio. Ouça sua gravação e avalie você mesmo.";
+  }
+  REC.state="done"; render();
+}
+function saveShadowScore(sc){
+  if(!LESSON) return;
+  LESSON.shadowBest[LESSON.i] = Math.max(LESSON.shadowBest[LESSON.i]||0, sc);
+  if(LESSON.day && LESSON.day.p) S.shadowScores[phraseId(LESSON.w, LESSON.d, LESSON.i)] = LESSON.shadowBest[LESSON.i];
+  save();
+}
+
+/* ---------- PAINEL DE FALA (usado no shadowing e no diálogo) ---------- */
+function micPanel(target){
+  const t = JSON.stringify(target).replace(/"/g,"&quot;");
+  if(REC.state === "recording"){
+    return `<div class="card2" style="border-radius:12px;padding:12px;margin-top:10px;">
+      <div class="row" style="justify-content:center;"><b style="color:var(--red);">● Gravando</b> <span class="dim" id="rectime">0s</span></div>
+      <div class="prog" style="height:10px;"><div id="lvl" style="width:0%;background:var(--acc2);"></div></div>
+      <div class="dim center" style="font-size:.78em;">Fale a frase em voz alta — paro sozinho quando você terminar.</div>
+      <button class="btn full mt" onclick="stopRec()">⏹ Terminei</button>
+    </div>`;
+  }
+  if(REC.state === "processing"){
+    return `<div class="card2" style="border-radius:12px;padding:14px;margin-top:10px;" class="center">
+      <div class="center dim">⏳ Analisando sua pronúncia...</div></div>`;
+  }
+  let html = "";
+  if(REC.err) html += `<div class="dim mt" style="color:var(--warn);font-size:.85em;">${REC.err}</div>`;
+  if(REC.state === "done" && REC.url){
+    html += `<div class="card2" style="border-radius:12px;padding:12px;margin-top:10px;">
+      <div class="row" style="justify-content:center;">
+        <button class="btn small" onclick="playMine()">▶ Ouvir você</button>
+        <button class="btn small ghost" onclick="playCompare(${t})">🔁 Nativo → você</button>
+        <button class="btn small warn" onclick="startRec(${t})">🎤 De novo</button>
+      </div>`;
+    if(REC.score !== null && REC.score !== undefined){
+      const c = REC.score>=70 ? "var(--acc2)" : "var(--warn)";
+      html += `<div class="center mt"><div class="score-big" style="color:${c}">${REC.score}%</div>
+        <div class="dim">Ouvi: “${esc(REC.text)}”</div>
+        <div class="dim">${REC.score>=90?"Perfeito! 🏆":REC.score>=70?"Muito bom — pode avançar. ✅":"Ouça o nativo e a sua gravação lado a lado e tente de novo. 💪"}</div></div>`;
+    }else if(ASR.status !== "ready"){
+      html += `<div class="dim center mt" style="font-size:.85em;">Compare sua voz com a do nativo e avalie:
+        <div class="row mt" style="justify-content:center;">
+          <button class="btn small green" onclick="selfGrade(85)">Falei bem</button>
+          <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>
+        </div></div>`;
+    }
+    html += `</div>`;
+  }
+  // linha de status do Whisper
+  if(ASR.status === "loading"){
+    html += `<div class="dim mt" style="font-size:.78em;">⏬ Baixando o avaliador de pronúncia... <b id="asrpct">${ASR.pct||0}%</b> (só desta vez)</div>`;
+  }else if(ASR.status === "off" && REC.state !== "recording"){
+    html += `<div class="dim mt" style="font-size:.78em;">💡 <a href="#" onclick="event.preventDefault();enableASR()" style="color:var(--acc);">Ativar nota automática de pronúncia</a> — baixa 40 MB uma única vez e depois funciona até sem internet, em qualquer navegador.</div>`;
+  }else if(ASR.status === "error"){
+    html += `<div class="dim mt" style="font-size:.78em;color:var(--warn);">Não consegui carregar o avaliador (${esc(ASR.err.slice(0,60))}). <a href="#" onclick="event.preventDefault();ASR.status='off';render()" style="color:var(--acc);">Tentar de novo</a></div>`;
+  }
+  return html;
+}
 function norm(s){ return s.toLowerCase().replace(/["""'''.,!?;:()-]/g," ").replace(/\s+/g," ").trim(); }
 function lev(a,b){
   const m=a.length, n=b.length; if(!m) return n; if(!n) return m;
@@ -926,7 +1154,7 @@ const TABS = [
   {id:"tips", ico:"🎓", label:"Coach"},
 ];
 let TAB = "home";
-function nav(tab){ stopAudio(); TAB=tab; LESSON=null; render(); window.scrollTo(0,0); }
+function nav(tab){ stopAudio(); resetRec(); TAB=tab; LESSON=null; render(); window.scrollTo(0,0); }
 function renderNav(){
   document.getElementById("nav").innerHTML = TABS.map(t=>
     `<button class="${TAB===t.id?'on':''}" onclick="nav('${t.id}')"><span class="ico">${t.ico}</span>${t.label}</button>`).join("");
@@ -1098,8 +1326,8 @@ function lessonHeader(){
   <h1>${blocks[L.block][0]} ${blocks[L.block][1]}</h1>
   <div class="dim mb">Semana ${L.w+1} · Dia ${L.d+1} — ${esc(L.day.t)}</div>`;
 }
-function exitLesson(){ stopAudio(); LESSON=null; TAB="home"; render(); }
-function nextBlock(){ stopAudio(); LESSON.block++; LESSON.i=0; LESSON.revealed=false; render(); window.scrollTo(0,0); }
+function exitLesson(){ stopAudio(); resetRec(); LESSON=null; TAB="home"; render(); }
+function nextBlock(){ stopAudio(); resetRec(); LESSON.block++; LESSON.i=0; LESSON.revealed=false; render(); window.scrollTo(0,0); }
 
 function viewLesson(){
   const L=LESSON;
@@ -1155,7 +1383,7 @@ function blockShadow(){
   const best = L.shadowBest[L.i];
   return lessonHeader()+`
   <div class="card card2"><b>Shadowing (10-15 min):</b>
-   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque 🎤 e fale — o app dá uma nota na sua pronúncia. Meta: 70%+ em cada frase. <b>A nota automática funciona no Chrome (PC/Android) e no Safari (iPhone)</b>; em outros navegadores, use a autoavaliação — o que treina é falar alto, não a nota.</div></div>
+   <div class="dim">Ouça e repita EM VOZ ALTA imediatamente, imitando o ritmo como um papagaio. 🐢 = devagar, ▶ = normal. Depois toque <b>🎤 Gravar</b> e fale: você vai <b>ouvir a sua voz logo depois da do nativo</b> — é aí que a pronúncia melhora de verdade. Meta: 70%+ em cada frase.</div></div>
   <div class="card center">
     <div class="dim mb">Frase ${L.i+1} de ${ps.length}</div>
     <div class="en" style="font-size:1.35em;">${esc(p[0])}</div>
@@ -1164,11 +1392,10 @@ function blockShadow(){
     <div class="row mt" style="justify-content:center;">
       <button class="btn" onclick="speak(${JSON.stringify(p[0]).replace(/"/g,"&quot;")}, S.slowRate)">🐢 Devagar</button>
       <button class="btn" onclick="speak(${JSON.stringify(p[0]).replace(/"/g,"&quot;")})">▶ Normal</button>
-      <button class="btn warn" onclick="micTest()">${MIC_BTN()}</button>
+      ${REC.state==="idle"?`<button class="btn warn" onclick="startRec(${JSON.stringify(p[0]).replace(/"/g,"&quot;")})">🎤 Gravar</button>`:""}
     </div>
-    <div class="mic-status mt" id="mic"></div>
-    ${MIC_NOTE()}
-    <div id="micScore">${best!==undefined?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div><div class="dim">${best>=70?"Excelente! Pode avançar.":"Ouça de novo e tente mais uma vez."}</div>`:""}</div>
+    ${micPanel(p[0])}
+    <div id="micScore">${best!==undefined&&REC.score===null?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div><div class="dim">${best>=70?"Excelente! Pode avançar.":"Ouça de novo e tente mais uma vez."}</div>`:""}</div>
   </div>
   <div class="row">
     <button class="btn ghost" onclick="shadowNav(-1)" ${L.i===0?"disabled":""}>← Anterior</button>
@@ -1178,30 +1405,8 @@ function blockShadow(){
       : `<button class="btn green" onclick="nextBlock()">Concluir shadowing →</button>`}
   </div>`;
 }
-function shadowNav(dir){ stopAudio(); LESSON.i=Math.max(0, LESSON.i+dir); render(); }
-function micTest(){
-  const L=LESSON; const idx=L.i; const day=L.day; const w=L.w, d=L.d; const p=day.p[idx];
-  const micEl=()=>document.getElementById("mic");
-  if(!SR || MIC_FAILS>=2){ // sem suporte ou falhando seguido: vai direto para autoavaliação
-    const el=micEl(); if(el) el.innerHTML = SELF_EVAL_HTML;
-    return;
-  }
-  const el=micEl(); if(el) el.textContent = "🎤 Ouvindo... fale agora!";
-  listen(alts=>{
-    if(!LESSON || LESSON.day!==day) return; // saiu da lição no meio
-    const sc = bestSimilarity(p[0], alts);
-    LESSON.shadowBest[idx] = Math.max(LESSON.shadowBest[idx]||0, sc);
-    S.shadowScores[phraseId(w,d,idx)] = LESSON.shadowBest[idx]; save();
-    if(LESSON.block===1 && LESSON.i===idx) render();
-  }, err=>{
-    if(!LESSON || LESSON.day!==day) return;
-    const e2=micEl(); if(!e2) return;
-    e2.innerHTML = err==="not-allowed"
-      ? "Permita o microfone no navegador para usar esta função."
-      : micFailHtml(err);
-  });
-}
-function selfGrade(sc){ LESSON.shadowBest[LESSON.i]=sc; render(); }
+function shadowNav(dir){ stopAudio(); resetRec(); LESSON.i=Math.max(0, LESSON.i+dir); render(); }
+function selfGrade(sc){ if(LESSON){ saveShadowScore(sc); REC.score = sc; } render(); }
 
 /* Bloco 3: Flashcards (SRS) */
 function buildSrsQueue(){
@@ -1400,7 +1605,7 @@ function blockDialogShadow(){
   const {ln} = lines[L.i];
   const best = L.shadowBest[L.i];
   return lessonHeader()+`
-  <div class="card card2"><div class="dim">Você é o <b class="speaker-b">🧑 viajante</b>. Ouça sua fala e repita em voz alta. Depois teste no 🎤.</div></div>
+  <div class="card card2"><div class="dim">Você é o <b class="speaker-b">🧑 viajante</b>. Ouça sua fala, repita em voz alta e grave no 🎤 para comparar com o nativo.</div></div>
   <div class="card center">
     <div class="dim mb">Sua fala ${L.i+1} de ${lines.length}</div>
     <div class="en" style="font-size:1.25em;">${esc(ln[1])}</div>
@@ -1408,35 +1613,16 @@ function blockDialogShadow(){
     <div class="row mt" style="justify-content:center;">
       <button class="btn" onclick="speak(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")}, S.slowRate)">🐢 Devagar</button>
       <button class="btn" onclick="speak(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">▶ Normal</button>
-      <button class="btn warn" onclick="micTestDialog(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">${MIC_BTN()}</button>
+      ${REC.state==="idle"?`<button class="btn warn" onclick="startRec(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">🎤 Gravar</button>`:""}
     </div>
-    <div class="mic-status mt" id="mic"></div>
-    ${MIC_NOTE()}
-    <div id="micScore">${best!==undefined?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div>`:""}</div>
+    ${micPanel(ln[1])}
+    <div id="micScore">${best!==undefined&&REC.score===null?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div>`:""}</div>
   </div>
   <div class="row">
     <button class="btn ghost" onclick="shadowNav(-1)" ${L.i===0?"disabled":""}>← Anterior</button>
     <div class="grow"></div>
     <button class="btn" onclick="shadowNav(1)">${L.i<lines.length-1?"Próxima →":"Concluir →"}</button>
   </div>`;
-}
-function micTestDialog(target){
-  const L=LESSON; const idx=L.i; const day=L.day;
-  const micEl=()=>document.getElementById("mic");
-  if(!SR || MIC_FAILS>=2){ const el=micEl(); if(el) el.innerHTML = SELF_EVAL_HTML; return; }
-  const el=micEl(); if(el) el.textContent="🎤 Ouvindo... fale agora!";
-  listen(alts=>{
-    if(!LESSON || LESSON.day!==day) return;
-    const sc=bestSimilarity(target,alts);
-    LESSON.shadowBest[idx]=Math.max(LESSON.shadowBest[idx]||0,sc);
-    if(LESSON.block===1 && LESSON.i===idx) render();
-  }, err=>{
-    if(!LESSON || LESSON.day!==day) return;
-    const e2=micEl(); if(!e2) return;
-    e2.innerHTML = err==="not-allowed"
-      ? "Permita o microfone no navegador para usar esta função."
-      : micFailHtml(err);
-  });
 }
 function blockFinal(){
   const L=LESSON;
@@ -1581,6 +1767,20 @@ function viewProgress(){
     <div class="dim mt" style="font-size:.8em;">Dica: no Windows, as vozes "Microsoft ... Online (Natural)" do Edge são as mais realistas.</div>
   </div>
   <div class="card">
+    <b>🎤 Nota automática de pronúncia</b>
+    <div class="dim mt">${
+      ASR.status==="ready" ? "✅ Ativa neste aparelho. Funciona em qualquer navegador, até sem internet."
+      : ASR.status==="loading" ? `⏬ Baixando... <b id="asrpct">${ASR.pct||0}%</b>`
+      : ASR.status==="error" ? `⚠️ Falhou: ${esc(ASR.err.slice(0,70))}`
+      : "Um avaliador de pronúncia roda dentro do próprio navegador (40 MB, baixados uma única vez). Depois disso o app ouve sua fala e dá a nota, mesmo offline — inclusive no iPhone."
+    }</div>
+    <div class="mt">${
+      ASR.status==="ready"
+        ? `<button class="btn ghost small" onclick="disableASR()">Desativar neste aparelho</button>`
+        : ASR.status==="loading" ? "" : `<button class="btn small green" onclick="enableASR()">Ativar agora</button>`
+    }</div>
+  </div>
+  <div class="card">
     <b>👤 Conta</b>
     <div class="dim mt">Conectado como <b style="color:var(--txt)">${esc(USER?USER.name:"")}</b> (${esc(USER?USER.username:"")})</div>
     <div class="dim mb">Progresso sincronizado na nuvem — entre em qualquer aparelho com seu usuário.</div>
@@ -1622,7 +1822,7 @@ function viewTips(){
   <div class="card">
     <b>🗣️ Como praticar fala SOZINHO (as 5 técnicas)</b>
     <div class="dim mt">
-    1. <b>Shadowing</b> (já está no app): repita imediatamente após o áudio, imitando ritmo e entonação como um papagaio.<br><br>
+    1. <b>Shadowing</b> (já está no app): repita imediatamente após o áudio, imitando ritmo e entonação como um papagaio. Depois grave no 🎤 e use o botão <b>🔁 Nativo → você</b>: ouvir sua voz logo após a do nativo é o que mais acelera a pronúncia — seu ouvido detecta a diferença sozinho.<br><br>
     2. <b>Narração da vida:</b> narre o que você faz, em inglês simples: "I'm drinking coffee. I'm tired. Let's go!" 5 min/dia no chuveiro ou no trânsito.<br><br>
     3. <b>Teatro de um homem só:</b> encene as duas partes dos diálogos do app em voz alta (você é o garçom E o cliente).<br><br>
     4. <b>Espelho de 1 minuto:</b> todo dia, 1 minuto se apresentando no espelho: nome, país, por que viaja. No fim da semana isso sai automático.<br><br>
