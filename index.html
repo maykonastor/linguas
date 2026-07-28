@@ -852,7 +852,8 @@ function stopAudio(){
    ============================================================ */
 const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const REC = { state:"idle", url:null, buffer:null, pcm:null, score:null, text:"", err:"", secs:0, rms:0 };
+const REC = { state:"idle", url:null, buffer:null, pcm:null, score:null, text:"", err:"", secs:0,
+              rms:0, rawPeak:0, voiceDur:0, fullDur:0, srcRate:0, blobType:"", blobKB:0, diag:"" };
 let micStream=null, micRec=null, micChunks=[], micCtx=null, micAnalyser=null, micRaf=null,
     micTimer=null, micAutoStop=null, playSrc=null, REC_TARGET="", micGen=0;
 
@@ -889,7 +890,8 @@ function unlockAudioTag(){         // chamado dentro de um toque real do usuári
 function resetRec(){
   if(REC.url){ try{ URL.revokeObjectURL(REC.url); }catch(e){} }
   REC.state="idle";  // sem isto o botão "Gravar" some ao ir para a próxima frase
-  REC.url=null; REC.buffer=null; REC.pcm=null; REC.score=null; REC.text=""; REC.err=""; REC.secs=0; REC.rms=0;
+  REC.url=null; REC.buffer=null; REC.pcm=null; REC.score=null; REC.text=""; REC.err=""; REC.secs=0;
+  REC.rms=0; REC.rawPeak=0; REC.voiceDur=0; REC.fullDur=0; REC.srcRate=0; REC.blobType=""; REC.blobKB=0; REC.diag="";
 }
 function releaseMic(){
   clearInterval(micTimer); clearTimeout(micAutoStop); clearInterval(micRaf);
@@ -998,8 +1000,48 @@ async function onRecStop(){
   if(ASR.status === "ready") await scoreRec();
   else { REC.state = "done"; render(); }
 }
+/* Reamostragem em JS puro (média de blocos = filtro anti-serrilhado simples).
+   Evita o OfflineAudioContext a 16 kHz, que o Safari do iPhone rejeita em várias versões. */
+function resampleTo16k(audioBuffer){
+  const sr = audioBuffer.sampleRate;
+  const src = audioBuffer.getChannelData(0);
+  if(sr === 16000) return Float32Array.from(src);
+  const ratio = sr/16000, len = Math.max(1, Math.floor(src.length/ratio));
+  const out = new Float32Array(len);
+  for(let i=0;i<len;i++){
+    const a = Math.floor(i*ratio), b = Math.min(src.length, Math.floor((i+1)*ratio));
+    let s=0, n=0; for(let j=a;j<b;j++){ s+=src[j]; n++; }
+    out[i] = n ? s/n : (src[a]||0);
+  }
+  return out;
+}
+/* Corta o silêncio das pontas e normaliza o volume: o Whisper acerta muito mais
+   com voz baixa de celular, e a métrica de "ouviu algo?" passa a olhar só a fala. */
+function trimAndBoost(pcm){
+  const W = 320;                       // janelas de 20 ms
+  const en = [];
+  for(let i=0;i<pcm.length;i+=W){
+    let s=0,n=0; const end=Math.min(i+W,pcm.length);
+    for(let j=i;j<end;j++){ s+=pcm[j]*pcm[j]; n++; }
+    en.push(n?Math.sqrt(s/n):0);
+  }
+  let peak=0; for(const e of en) if(e>peak) peak=e;
+  if(peak<=0) return {pcm:new Float32Array(0), peak:0, dur:0};
+  const th = Math.max(peak*0.12, 0.004);
+  let first=-1,last=-1;
+  for(let k=0;k<en.length;k++){ if(en[k]>=th){ if(first<0) first=k; last=k; } }
+  if(first<0) return {pcm:new Float32Array(0), peak, dur:0};
+  const pad=8;                          // ~160 ms de folga em cada ponta
+  const s0=Math.max(0,(first-pad)*W), s1=Math.min(pcm.length,(last+1+pad)*W);
+  const cut = pcm.slice(s0,s1);
+  let mx=0; for(let i=0;i<cut.length;i++){ const a=Math.abs(cut[i]); if(a>mx) mx=a; }
+  if(mx>0 && mx<0.85){ const g=Math.min(10, 0.85/mx); for(let i=0;i<cut.length;i++) cut[i]*=g; }
+  return {pcm:cut, peak, dur:cut.length/16000};
+}
 async function decodeRec(blob){
-  const C = window.AudioContext || window.webkitAudioContext; if(!C) return;
+  REC.blobType = blob.type || "?"; REC.blobKB = Math.round(blob.size/1024);
+  const C = window.AudioContext || window.webkitAudioContext;
+  if(!C){ REC.diag="sem AudioContext"; return; }
   const ctx = new C();   // contexto descartável: não pode reativar a rota do auricular no iOS
   let decoded;
   try{
@@ -1010,18 +1052,12 @@ async function decodeRec(blob){
     });
   } finally { try{ ctx.close(); }catch(e){} }
   REC.buffer = decoded;
-  // reamostra para 16 kHz mono (formato que o Whisper espera)
-  const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  if(!OC) return;
-  const len = Math.max(1, Math.ceil(decoded.duration * 16000));
-  const off = new OC(1, len, 16000);
-  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
-  const out = await new Promise((res, rej)=>{
-    const p = off.startRendering(); if(p && p.then) p.then(res, rej); else off.oncomplete = e => res(e.renderedBuffer);
-  });
-  REC.pcm = out.getChannelData(0);
-  let sum = 0; for(let i=0;i<REC.pcm.length;i++) sum += REC.pcm[i]*REC.pcm[i];
-  REC.rms = REC.pcm.length ? Math.sqrt(sum/REC.pcm.length) : 0;   // volume real: separa fala de silêncio
+  REC.srcRate = decoded.sampleRate;
+  const raw = resampleTo16k(decoded);
+  const t = trimAndBoost(raw);
+  REC.pcm = t.pcm; REC.rawPeak = t.peak; REC.voiceDur = t.dur; REC.fullDur = decoded.duration;
+  let sum=0; for(let i=0;i<t.pcm.length;i++) sum += t.pcm[i]*t.pcm[i];
+  REC.rms = t.pcm.length ? Math.sqrt(sum/t.pcm.length) : 0;
 }
 function playMine(){
   if(!REC.url) return;
@@ -1078,22 +1114,50 @@ function disableASR(){ try{ localStorage.removeItem("asrOn"); }catch(e){} ASR.st
 async function scoreRec(){
   REC.state="processing"; render();
   try{
-    if(!REC.pcm) throw new Error("sem áudio");
-    if(REC.rms < 0.012){   // gravação praticamente muda: o Whisper inventaria texto
+    if(!REC.pcm || !REC.pcm.length){
+      // buffer decodificou mas nada passou do corte de silêncio → foi mudo mesmo
+      REC.err = REC.buffer
+        ? "Não ouvi sua voz. Verifique se o microfone está liberado e fale mais perto e mais alto."
+        : "Não consegui ler o áudio gravado. Ouça sua gravação e avalie você mesmo.";
+      REC.diag = REC.buffer ? "sem fala detectada" : "decode falhou";
+      REC.score=null; REC.state="done"; render(); return;
+    }
+    // decide pelo PICO do trecho falado (não pela média do áudio todo, que o
+    // silêncio derrubava) e pela duração da fala isolada
+    if(REC.rawPeak < 0.015 || REC.voiceDur < 0.25){
       REC.err = "Não ouvi sua voz. Fale mais perto do microfone e um pouco mais alto.";
       REC.score = null; REC.state="done"; render(); return;
     }
     const out = await ASR.pipe(REC.pcm);
-    REC.text = String((out && out.text) || "").trim();
-    if(norm(REC.text).length < 2){ REC.err = "Não entendi o que você falou. Tente de novo, falando um pouco mais devagar."; REC.score = null; }
-    else{
+    REC.text = String((out && out.text) || "").replace(/\s+/g," ").trim();
+    const heard = norm(REC.text);
+    if(heard.length < 2){
+      REC.err = "Não entendi o que você falou. Tente de novo, falando um pouco mais devagar.";
+      REC.score = null;
+    }else{
       REC.score = similarity(REC_TARGET, REC.text);
       saveShadowScore(REC.score);
     }
   }catch(e){
     REC.err = "Não consegui avaliar este áudio. Ouça sua gravação e avalie você mesmo.";
+    REC.diag = String((e&&e.message)||e).slice(0,80);
   }
   REC.state="done"; render();
+}
+function diagText(){
+  return [
+    "fmt="+(REC.blobType||"?"), REC.blobKB+"KB", "taxa="+(REC.srcRate||0),
+    "dur="+(REC.fullDur||0).toFixed(1)+"s", "fala="+(REC.voiceDur||0).toFixed(1)+"s",
+    "pico="+(REC.rawPeak||0).toFixed(3), "asr="+ASR.status,
+    REC.text ? "ouvi=\""+REC.text.slice(0,60)+"\"" : "ouvi=(nada)",
+    REC.score!==null&&REC.score!==undefined ? "nota="+REC.score : "nota=-",
+    REC.diag ? "err="+REC.diag : ""
+  ].filter(Boolean).join(" · ");
+}
+function copyDiag(){
+  const t = diagText();
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(()=>toast("Diagnóstico copiado!"),()=>{});
+  else toast(t);
 }
 function saveShadowScore(sc){
   if(!LESSON) return;
@@ -1126,9 +1190,8 @@ function micPanel(target){
         <button class="btn small ghost" onclick="playCompare(${t})">🔁 Nativo → você</button>
         <button class="btn small warn" onclick="startRec(${t})">🎤 De novo</button>
       </div>`;
-    const dur = REC.pcm ? (REC.pcm.length/16000) : 0;
-    if(dur && dur < 1.6)
-      html += `<div class="dim mt" style="color:var(--warn);font-size:.8em;">⚠️ Gravou só ${dur.toFixed(1)}s — comece a falar logo após tocar em Gravar.</div>`;
+    if(REC.voiceDur && REC.voiceDur < 0.7)
+      html += `<div class="dim mt" style="color:var(--warn);font-size:.8em;">⚠️ Sua fala durou só ${REC.voiceDur.toFixed(1)}s — fale a frase inteira depois de tocar em Gravar.</div>`;
     if(REC.score !== null && REC.score !== undefined){
       const c = REC.score>=70 ? "var(--acc2)" : "var(--warn)";
       html += `<div class="center mt"><div class="score-big" style="color:${c}">${REC.score}%</div>
@@ -1141,6 +1204,8 @@ function micPanel(target){
           <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>
         </div></div>`;
     }
+    html += `<div class="dim mt" style="font-size:.68em;opacity:.55;">${esc(diagText())}
+      <a href="#" onclick="event.preventDefault();copyDiag()" style="color:var(--acc);">copiar</a></div>`;
     html += `</div>`;
   }
   // ativação do avaliador — visível de verdade
