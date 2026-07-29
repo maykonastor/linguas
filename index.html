@@ -743,6 +743,10 @@ async function enterApp(session){
     SYNC = "ok"; cloudDirty = true;
     clearTimeout(cloudTimer); cloudTimer = setTimeout(flushCloud, 800);
   }
+  // limpeza: notas 0 gravadas por versões antigas ficavam presas na tela para sempre
+  let limpou = false;
+  for(const k of Object.keys(S.shadowScores||{})) if(!(S.shadowScores[k] > 0)){ delete S.shadowScores[k]; limpou = true; }
+  if(limpou) cloudDirty = true;
   persistLocal();
   APP_READY = true;
   document.getElementById("nav").style.display = "flex";
@@ -855,7 +859,7 @@ const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
 const REC = { state:"idle", url:null, buffer:null, pcm:null, score:null, text:"", err:"", secs:0,
               rms:0, rawPeak:0, voiceDur:0, fullDur:0, srcRate:0, blobType:"", blobKB:0, diag:"" };
 let micStream=null, micRec=null, micChunks=[], micCtx=null, micAnalyser=null, micRaf=null,
-    micTimer=null, micAutoStop=null, playSrc=null, REC_TARGET="", micGen=0;
+    micTimer=null, micAutoStop=null, playSrc=null, REC_TARGET="", micGen=0, REC_CTX=null, asrChain=Promise.resolve();
 
 function recSupported(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -869,7 +873,8 @@ function recMime(){
 function audioCtx(){
   if(micCtx && micCtx.state === "closed") micCtx = null;
   if(!micCtx){ const C = window.AudioContext || window.webkitAudioContext; if(C) micCtx = new C(); }
-  if(micCtx && micCtx.state === "suspended") micCtx.resume();  // desbloqueia áudio no iOS
+  // "interrupted" é um estado exclusivo do WebKit (ligação, Siri, outro app tocando)
+  if(micCtx && (micCtx.state === "suspended" || micCtx.state === "interrupted")) micCtx.resume();
   return micCtx;
 }
 /* Reprodução por elemento <audio>: no iPhone é o caminho que sai pelo alto-falante
@@ -904,7 +909,10 @@ function releaseMic(){
 }
 function abortRec(){
   micGen++;
-  if(micRec && micRec.state === "recording"){ try{ micRec.onstop=null; micRec.stop(); }catch(e){} }
+  if(micRec){                       // desarma SEMPRE: um onstop órfão sequestra a próxima gravação
+    try{ micRec.onstop = null; micRec.ondataavailable = null; }catch(e){}
+    if(micRec.state !== "inactive"){ try{ micRec.stop(); }catch(e){} }
+  }
   micRec=null; releaseMic();
   if(playSrc){ try{ playSrc.stop(); }catch(e){} playSrc=null; }
   if(REC.state==="recording"||REC.state==="processing") REC.state="idle";
@@ -912,6 +920,9 @@ function abortRec(){
 
 async function startRec(target){
   REC_TARGET = target || "";
+  // amarra esta gravação à frase atual: o resultado do Whisper chega depois e
+  // não pode ser gravado na frase que estiver na tela naquele momento
+  REC_CTX = LESSON ? {i:LESSON.i, w:LESSON.w, d:LESSON.d, target:REC_TARGET} : null;
   if(!recSupported()){
     REC.err = "Este navegador não grava áudio. No iPhone use o <b>Safari</b>; no computador, o <b>Chrome</b>.";
     render(); return;
@@ -937,6 +948,12 @@ async function startRec(target){
                              : "Não consegui abrir o microfone. Feche outros apps que possam estar usando-o.");
     render(); return;
   }
+  // o iOS encerra a captura sozinho em ligação/troca de app: não deixa gravação zumbi
+  try{
+    micStream.getAudioTracks().forEach(t => t.onended = ()=>{
+      if(REC.state === "recording"){ REC.err = "A gravação foi interrompida pelo sistema. Tente de novo."; abortRec(); render(); }
+    });
+  }catch(e){}
   // medidor de volume + parada automática por tempo real (não por frames)
   try{
     const ctx = audioCtx();
@@ -944,6 +961,10 @@ async function startRec(target){
       const src = ctx.createMediaStreamSource(micStream);
       micAnalyser = ctx.createAnalyser(); micAnalyser.fftSize = 512;
       src.connect(micAnalyser);
+      // O WebKit (iPhone) só processa um grafo que chega ao destino. Sem este
+      // dreno mudo, o analisador devolve silêncio e a detecção de fala nunca arma.
+      const sink = ctx.createGain(); sink.gain.value = 0;
+      micAnalyser.connect(sink); sink.connect(ctx.destination);
       const buf = new Uint8Array(micAnalyser.frequencyBinCount);
       const t0 = performance.now();
       const gen = ++micGen;      // um loop antigo NUNCA pode parar a gravação nova
@@ -990,14 +1011,17 @@ function stopRec(){
   if(micRec && micRec.state === "recording"){ try{ micRec.stop(); }catch(e){} }
 }
 async function onRecStop(){
+  const gen = micGen;               // tudo que vem depois pertence a ESTA gravação
+  const ctx = REC_CTX;
   const blob = new Blob(micChunks, {type: (micRec && micRec.mimeType) || "audio/webm"});
   releaseMic();
   if(!blob.size){ REC.state="idle"; REC.err="Não gravou nada. Verifique a permissão do microfone."; render(); return; }
   REC.url = URL.createObjectURL(blob);
   REC.state = ASR.status==="ready" ? "processing" : "done";
   render();
-  try{ await decodeRec(blob); }catch(e){}
-  if(ASR.status === "ready") await scoreRec();
+  try{ await decodeRec(blob); }catch(e){ REC.diag = "decode: "+String((e&&e.message)||e).slice(0,50); }
+  if(gen !== micGen) return;        // o usuário já começou outra gravação: descarta
+  if(ASR.status === "ready") await scoreRec(gen, ctx);
   else { REC.state = "done"; render(); }
 }
 /* Reamostragem em JS puro (média de blocos = filtro anti-serrilhado simples).
@@ -1111,7 +1135,9 @@ async function enableASR(){
   render();
 }
 function disableASR(){ try{ localStorage.removeItem("asrOn"); }catch(e){} ASR.status="off"; ASR.pipe=null; render(); }
-async function scoreRec(){
+async function scoreRec(gen, ctx){
+  if(gen === undefined) gen = micGen;
+  ctx = ctx || REC_CTX;
   REC.state="processing"; render();
   try{
     if(!REC.pcm || !REC.pcm.length){
@@ -1128,15 +1154,23 @@ async function scoreRec(){
       REC.err = "Não ouvi sua voz. Fale mais perto do microfone e um pouco mais alto.";
       REC.score = null; REC.state="done"; render(); return;
     }
-    const out = await ASR.pipe(REC.pcm);
+    const pcm = REC.pcm;
+    // uma inferência por vez: a sessão ONNX é single-thread e duas chamadas se corrompem
+    const out = await (asrChain = asrChain.then(()=>ASR.pipe(pcm), ()=>ASR.pipe(pcm)));
+    if(gen !== micGen) return;                    // resultado obsoleto: descarta
     REC.text = String((out && out.text) || "").replace(/\s+/g," ").trim();
-    const heard = norm(REC.text);
-    if(heard.length < 2){
+    const heard = norm(REC.text).split(" ").filter(Boolean);
+    const alvo  = norm((ctx && ctx.target) || REC_TARGET);
+    const FILLER = ["you","the","a","uh","um","oh","hmm","yeah","thank you","bye"];
+    if(!alvo){
+      REC.err = "Não consegui identificar a frase desta tela. Grave de novo.";
+      REC.score = null;
+    }else if(!heard.length || (heard.length === 1 && FILLER.indexOf(heard[0]) >= 0 && alvo.split(" ").length > 1)){
       REC.err = "Não entendi o que você falou. Tente de novo, falando um pouco mais devagar.";
       REC.score = null;
     }else{
-      REC.score = similarity(REC_TARGET, REC.text);
-      saveShadowScore(REC.score);
+      REC.score = similarity(alvo, REC.text);
+      saveShadowScore(REC.score, ctx);
     }
   }catch(e){
     REC.err = "Não consegui avaliar este áudio. Ouça sua gravação e avalie você mesmo.";
@@ -1159,10 +1193,13 @@ function copyDiag(){
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(()=>toast("Diagnóstico copiado!"),()=>{});
   else toast(t);
 }
-function saveShadowScore(sc){
-  if(!LESSON) return;
-  LESSON.shadowBest[LESSON.i] = Math.max(LESSON.shadowBest[LESSON.i]||0, sc);
-  if(LESSON.day && LESSON.day.p) S.shadowScores[phraseId(LESSON.w, LESSON.d, LESSON.i)] = LESSON.shadowBest[LESSON.i];
+function saveShadowScore(sc, ctx){
+  if(!LESSON || !(sc > 0)) return;    // nota 0 é sempre artefato — nunca vira histórico
+  const c = ctx || REC_CTX;
+  if(!c || LESSON.w !== c.w || LESSON.d !== c.d) return;   // usuário trocou de lição
+  const i = c.i;
+  LESSON.shadowBest[i] = Math.max(LESSON.shadowBest[i]||0, sc);
+  if(LESSON.day && LESSON.day.p) S.shadowScores[phraseId(c.w, c.d, i)] = LESSON.shadowBest[i];
   save();
 }
 
@@ -1197,8 +1234,10 @@ function micPanel(target){
       html += `<div class="center mt"><div class="score-big" style="color:${c}">${REC.score}%</div>
         <div class="dim">Ouvi: “${esc(REC.text)}”</div>
         <div class="dim">${REC.score>=90?"Perfeito! 🏆":REC.score>=70?"Muito bom — pode avançar. ✅":"Ouça o nativo e a sua gravação lado a lado e tente de novo. 💪"}</div></div>`;
-    }else if(ASR.status !== "ready" && ASR.status !== "loading"){
-      html += `<div class="dim center mt" style="font-size:.85em;">Compare sua voz com a do nativo e avalie:
+    }
+    // saída manual sempre disponível quando não há nota confiável (ou a nota veio baixa)
+    if(REC.score === null || REC.score === undefined || REC.score < 40){
+      html += `<div class="dim center mt" style="font-size:.85em;">${REC.score!==null&&REC.score!==undefined&&REC.score<40?"Discordo da nota? Ouça sua voz e avalie:":"Compare sua voz com a do nativo e avalie:"}
         <div class="row mt" style="justify-content:center;">
           <button class="btn small green" onclick="selfGrade(85)">Falei bem</button>
           <button class="btn small warn" onclick="selfGrade(50)">Preciso repetir</button>
@@ -1234,11 +1273,25 @@ function lev(a,b){
     prev=cur; }
   return prev[n];
 }
+/* Distância de edição contando PALAVRAS (não letras): "Hello. Hi." e "hello hi"
+   passam a ser idênticos, e uma palavra extra não derruba a nota inteira. */
+function levWords(a,b){
+  const m=a.length, n=b.length; if(!m) return n; if(!n) return m;
+  let prev = Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur; }
+  return prev[n];
+}
 function similarity(target, spoken){
-  const t=norm(target), s=norm(spoken);
-  if(!t.length) return 0;
-  const d = lev(t,s);
-  return Math.max(0, Math.round(100*(1 - d/Math.max(t.length,s.length))));
+  const T = norm(target).split(" ").filter(Boolean);
+  const S = norm(spoken).split(" ").filter(Boolean);
+  if(!T.length) return null;          // alvo inválido: não inventa nota
+  if(!S.length) return 0;
+  const d = levWords(T,S);
+  const ins = Math.max(0, S.length - T.length);          // palavras a mais pesam metade
+  const eff = Math.max(0, d - 0.5*Math.min(ins, d));
+  return Math.max(0, Math.min(100, Math.round(100*(1 - eff/T.length))));
 }
 function bestSimilarity(target, alts){ return Math.max(...alts.map(a=>similarity(target,a))); }
 
@@ -1514,7 +1567,7 @@ function blockShadow(){
       ${REC.state==="idle"?`<button class="btn warn" onclick="startRec(${JSON.stringify(p[0]).replace(/"/g,"&quot;")})">🎤 Gravar</button>`:""}
     </div>
     ${micPanel(p[0])}
-    <div id="micScore">${best!==undefined&&REC.score===null?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div><div class="dim">${best>=70?"Excelente! Pode avançar.":"Ouça de novo e tente mais uma vez."}</div>`:""}</div>
+    <div id="micScore">${best>0&&REC.score===null&&REC.state==="idle"?`<div class="dim" style="font-size:.8em;">Melhor tentativa nesta frase: <b style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</b></div>`:""}</div>
   </div>
   <div class="row">
     <button class="btn ghost" onclick="shadowNav(-1)" ${L.i===0?"disabled":""}>← Anterior</button>
@@ -1735,7 +1788,7 @@ function blockDialogShadow(){
       ${REC.state==="idle"?`<button class="btn warn" onclick="startRec(${JSON.stringify(ln[1]).replace(/"/g,"&quot;")})">🎤 Gravar</button>`:""}
     </div>
     ${micPanel(ln[1])}
-    <div id="micScore">${best!==undefined&&REC.score===null?`<div class="score-big" style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</div>`:""}</div>
+    <div id="micScore">${best>0&&REC.score===null&&REC.state==="idle"?`<div class="dim" style="font-size:.8em;">Melhor tentativa nesta frase: <b style="color:${best>=70?'var(--acc2)':'var(--warn)'}">${best}%</b></div>`:""}</div>
   </div>
   <div class="row">
     <button class="btn ghost" onclick="shadowNav(-1)" ${L.i===0?"disabled":""}>← Anterior</button>
