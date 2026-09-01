@@ -126,13 +126,17 @@
     { id:"cofre", label:"Cofre" }
   ];
 
+  const AI_URL = "https://sentinela.autofixtecnologia.app/missao-ai/ask";
+
   const PIT = {
     tab: "agora",
     vault: null,
     huntFilter: localStorage.getItem(KEYS.huntFilter) || "p1",
     q: "",
     timer: null,
-    live: {}
+    live: {},
+    chat: [],
+    aiBusy: false
   };
 
   function px(s) {
@@ -426,7 +430,93 @@
           <a class="pit-btn ghost sm" href="${px(c.latam)}">LATAM</a>
         </div>
       </div>
+    </section>
+    ${aiPanel()}`;
+  }
+
+  function missionCtx() {
+    const st = missionState();
+    const hunts = loadJSON(KEYS.hunts, {});
+    return {
+      who: who(),
+      phase: st.phase,
+      now: st.current ? { id: st.current.id, title: st.current.title, sub: st.current.sub } : null,
+      next: (st.upcoming || []).slice(0, 3).map((e) => e.title),
+      huntsOpen: HUNTS.filter((h) => !hunts[h.id]).map((h) => h.pri + " " + h.name + " · " + h.where),
+      leads: loadJSON(KEYS.leads, []).length,
+      wx: PIT.live.wx ? Math.round(PIT.live.wx.temperature_2m) + "C" : null,
+      eur: PIT.live.eur || null
+    };
+  }
+
+  function aiPanel() {
+    const log = (PIT.chat || []).map((m) => {
+      const lead = m.lead ? `<div class="pit-ai-lead"><b>${px(m.lead.company || "Lead")}</b>
+        <div class="pit-muted">${px(m.lead.person || "")} · ${px(m.lead.hall || "")}</div>
+        <button class="pit-btn sm" data-save-lead="${px(JSON.stringify(m.lead))}">Salvar lead</button></div>` : "";
+      return `<div class="pit-ai-msg ${px(m.role)}${m.err ? " err" : ""}">${px(m.text)}${lead}</div>`;
+    }).join("");
+    return `<section class="pit-card pit-ai">
+      <h2>Grok · missão</h2>
+      <p class="pit-muted">Pergunta em PT. Foto do cartão ou do estande vira lead.</p>
+      <div class="pit-ai-chips">
+        <button type="button" data-ai-chip="Como apresento a Auto Fix em 15 segundos, em inglês e alemão.">Apresentação</button>
+        <button type="button" data-ai-chip="Três perguntas curtas para um stand de scanner HV / ADAS.">Perguntas HV</button>
+        <button type="button" data-ai-chip="Escreve um e-mail curto de follow-up em inglês para um stand que visitamos hoje.">Follow-up</button>
+      </div>
+      <div class="pit-ai-log" id="pit-ai-log">${log || ""}</div>
+      <div class="pit-ai-row">
+        <input id="pit-ai-q" placeholder="Pergunta da missão…" maxlength="500">
+        <label class="pit-ai-cam">Foto<input id="pit-ai-cam" type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+      <button class="pit-btn" id="pit-ai-send" style="margin-top:8px" ${PIT.aiBusy ? "disabled" : ""}>${PIT.aiBusy ? "Pensando…" : "Perguntar"}</button>
     </section>`;
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const max = 1280;
+        let w = img.width, h = img.height;
+        if (w > max) { h = Math.round(h * max / w); w = max; }
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL("image/jpeg", 0.72));
+      };
+      img.onerror = () => reject(new Error("imagem"));
+      img.src = url;
+    });
+  }
+
+  async function askGrok(text, image) {
+    if (PIT.aiBusy) return;
+    const q = (text || "").trim();
+    if (!q && !image) return;
+    PIT.aiBusy = true;
+    PIT.chat.push({ role: "user", text: q || "Foto do stand / cartão" });
+    remount();
+    const history = PIT.chat.slice(0, -1).filter((m) => !m.err).slice(-8).map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.text
+    }));
+    try {
+      const r = await fetch(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: q, image: image || null, history, ctx: missionCtx() })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "IA indisponível");
+      PIT.chat.push({ role: "bot", text: data.text || "…", lead: data.lead || null });
+    } catch (e) {
+      PIT.chat.push({ role: "bot", text: e.message || "Sem sinal até o Grok. Usa o copiloto offline.", err: true });
+    }
+    PIT.aiBusy = false;
+    remount();
   }
 
   function linguasCard() {
@@ -925,6 +1015,20 @@
     root.addEventListener("click", (e) => {
       const tr = e.target.closest("[data-translate]");
       if (tr) { e.preventDefault(); openTranslate(); return; }
+      const chip = e.target.closest("[data-ai-chip]");
+      if (chip) { askGrok(chip.dataset.aiChip); return; }
+      const saveLead = e.target.closest("[data-save-lead]");
+      if (saveLead) {
+        try {
+          const lead = JSON.parse(saveLead.dataset.saveLead);
+          const leads = loadJSON(KEYS.leads, []);
+          leads.unshift({ ...lead, at: new Date().toISOString(), via: "grok" });
+          saveJSON(KEYS.leads, leads);
+          ping("Lead salvo");
+          remount();
+        } catch {}
+        return;
+      }
       const tab = e.target.closest("[data-pit-tab]");
       if (tab) { PIT.tab = tab.dataset.pitTab; remount(); return; }
       const hf = e.target.closest("[data-hf]");
@@ -1039,11 +1143,31 @@
       ping("Cofre travado");
       remount();
     };
+    const aiSend = document.getElementById("pit-ai-send");
+    const aiQ = document.getElementById("pit-ai-q");
+    if (aiSend && aiQ) {
+      const go = () => askGrok(aiQ.value);
+      aiSend.onclick = go;
+      aiQ.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } };
+    }
+    const cam = document.getElementById("pit-ai-cam");
+    if (cam) cam.onchange = async () => {
+      const file = cam.files && cam.files[0];
+      if (!file) return;
+      try {
+        const data = await compressImage(file);
+        await askGrok(aiQ && aiQ.value, data);
+      } catch {
+        ping("Não li a foto");
+      }
+      cam.value = "";
+    };
 
     if (PIT.timer) clearInterval(PIT.timer);
     PIT.timer = setInterval(() => {
       if (window.TAB !== "pit") return;
       refreshLive();
+      if (PIT.aiBusy) return;
       const ae = document.activeElement;
       if (ae && /INPUT|TEXTAREA/.test(ae.tagName)) return;
       remount();

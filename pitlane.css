@@ -421,3 +421,31 @@ textarea.pit-field{ min-height:88px; resize:vertical; }
   color:#d4b37a; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
   text-align:left; padding:0 0 16px; font-weight:700;
 }
+
+.pit-ai{ margin-top:4px; }
+.pit-ai-log{ display:grid; gap:10px; margin:12px 0; text-align:left; }
+.pit-ai-msg{
+  padding:12px 14px; border-radius:16px; font-size:14px; line-height:1.45;
+  white-space:pre-wrap;
+}
+.pit-ai-msg.user{ background:rgba(212,179,122,.14); }
+.pit-ai-msg.bot{ background:rgba(255,255,255,.04); border:1px solid var(--line); }
+.pit-ai-msg.err{ color:#e6b4b4; }
+.pit-ai-chips{ display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 12px; }
+.pit-ai-chips button{
+  border:1px solid var(--line); background:transparent; color:var(--ink);
+  border-radius:999px; padding:7px 12px; font-size:12px;
+}
+.pit-ai-row{ display:flex; gap:8px; align-items:center; }
+.pit-ai-row input{
+  flex:1; background:transparent; color:var(--ink);
+  border:1px solid var(--line); border-radius:14px; padding:12px 14px; font:inherit;
+}
+.pit-ai-row input:focus{ outline:none; border-color:var(--gold); }
+.pit-ai-cam{
+  flex:0 0 auto; border:1px solid var(--line); border-radius:14px;
+  padding:12px 12px; font-size:13px; color:var(--gold); font-weight:700;
+}
+.pit-ai-lead{
+  margin-top:10px; padding-top:10px; border-top:1px dashed var(--line);
+}

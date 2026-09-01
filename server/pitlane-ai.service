@@ -1,0 +1,15 @@
+[Unit]
+Description=PITLANE Missao AI proxy (xAI)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pitlane-ai
+EnvironmentFile=/opt/pitlane-ai/.env
+ExecStart=/usr/bin/node /opt/pitlane-ai/missao-ai.mjs
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
