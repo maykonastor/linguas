@@ -83,6 +83,7 @@
   .checkitem{display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px solid var(--line);}
   .checkitem input{width:20px; height:20px; margin-top:2px;}
 </style>
+<link rel="stylesheet" href="./pitlane.css">
 </head>
 <body>
 <div class="toast" id="toast"></div>
@@ -90,6 +91,7 @@
 <nav id="nav"></nav>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="./pitlane.js"></script>
 <script>
 "use strict";
 /* ============================================================
@@ -750,7 +752,8 @@ async function enterApp(session){
   persistLocal();
   APP_READY = true;
   document.getElementById("nav").style.display = "flex";
-  TAB = "home"; LESSON = null; render();
+  TAB = (location.hash==="#missao" || location.hash==="#pit") ? "pit" : "home";
+  LESSON = null; render();
   if(asrWanted()) enableASR();   // já ativou antes neste aparelho: carrega do cache
 }
 async function retryCloudLoad(){
@@ -1319,10 +1322,10 @@ function introducedIds(){ // frases de dias já iniciados/concluídos
 /* ---------- NAVEGAÇÃO ---------- */
 const TABS = [
   {id:"home", ico:"🏠", label:"Hoje"},
+  {id:"pit", ico:"✦", label:"Missão"},
   {id:"lessons", ico:"📅", label:"Plano"},
   {id:"phrases", ico:"🧳", label:"Frases"},
   {id:"srs", ico:"🧠", label:"Revisão"},
-  {id:"progress", ico:"📊", label:"Progresso"},
   {id:"tips", ico:"🎓", label:"Coach"},
 ];
 let TAB = "home";
@@ -1428,6 +1431,12 @@ function viewHome(){
   return `
   <div class="row"><h1 class="grow">🚀 Inglês Turbo</h1><span class="pill" id="syncpill">☁️</span></div>
   <div class="dim mb">${firstName()?`Olá, <b style="color:var(--txt)">${esc(firstName())}</b>! Seu coach de conversação para a viagem`:"Seu coach de conversação para a viagem"}</div>
+  <div class="card" style="background:linear-gradient(180deg,#1c1812,#1a2232);border-color:#3d3428;">
+    <div class="dim" style="letter-spacing:.22em;text-transform:uppercase;font-size:.72em;color:#d4b37a;">Automechanika</div>
+    <h2 style="margin-top:8px;font-family:Georgia,'Iowan Old Style',serif;font-weight:400;letter-spacing:-.02em;">Missão Frankfurt</h2>
+    <div class="dim mb">Itinerário, o que fazer agora, frases de stand, caça EV e cofre — no mesmo app.</div>
+    <button class="btn full" style="background:#d4b37a;color:#1a140c;" onclick="nav('pit')">Abrir a missão</button>
+  </div>
   <div class="card card2">
     <div class="row">
       <div class="grow"><div class="big">✈️ ${dt} dias</div><div class="dim">até o embarque (07/09/2026)</div></div>
@@ -1979,6 +1988,16 @@ async function resetAll(){
 function viewTips(){
   return `<h1>🎓 Seu Coach</h1>
   <div class="card">
+    <div class="row"><div class="grow"><b>✦ Missão Frankfurt</b>
+    <div class="dim">Cérebro da viagem: agora, rota, caça, falar, cofre.</div></div>
+    <button class="btn small" onclick="nav('pit')">Abrir</button></div>
+  </div>
+  <div class="card">
+    <div class="row"><div class="grow"><b>📊 Progresso e conta</b>
+    <div class="dim">Dias feitos, memória, voz, sair da conta.</div></div>
+    <button class="btn small" onclick="nav('progress')">Abrir</button></div>
+  </div>
+  <div class="card">
     <div class="row"><div class="grow"><b>🇩🇪 Alemão de Cortesia (bônus)</b>
     <div class="dim">30 frases com áudio para conquistar os alemães.</div></div>
     <button class="btn small" onclick="nav('german')">Abrir</button></div>
@@ -2035,6 +2054,7 @@ function render(){
   let html="";
   if(TAB==="lesson" && LESSON) html=viewLesson();
   else if(TAB==="home") html=viewHome();
+  else if(TAB==="pit") html=(typeof viewPit==="function"?viewPit():"<div class='card'>Recarregue para abrir a Missão.</div>");
   else if(TAB==="lessons") html=viewLessons();
   else if(TAB==="phrases") html=viewPhrases();
   else if(TAB==="srs") html=viewSrs();
@@ -2042,9 +2062,11 @@ function render(){
   else if(TAB==="tips") html=viewTips();
   else if(TAB==="german") html=viewGerman();
   document.getElementById("app").innerHTML=html;
+  document.body.classList.toggle("pit-mode", TAB==="pit");
   renderNav();
   renderSync();
   maybeAutoAudio();
+  if(TAB==="pit" && window.PIT && typeof PIT.mount==="function") PIT.mount();
 }
 boot();
 setTimeout(()=>{ if(APP_READY && TAB!=="lesson") render(); }, 1200); // re-render após vozes carregarem

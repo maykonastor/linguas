@@ -4,6 +4,8 @@ Plataforma de aprendizado acelerado de idiomas — **linguas.autofixtecnologia.a
 
 Curso atual: **Inglês Turbo** — 7 semanas de conversação de sobrevivência para viagem (metodologia FSI + Pimsleur + shadowing + repetição espaçada), com bônus de alemão de cortesia.
 
+Aba **Missão** (PITLANE): itinerário Automechanika, o que fazer agora, caça de stands, phrasebook EN/DE e cofre.
+
 ## Stack
 - App: single-file HTML/JS (sem build), hospedado no GitHub Pages
 - Auth + progresso por usuário: Supabase (`linguas_progress`, RLS por usuário)
