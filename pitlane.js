@@ -131,7 +131,8 @@
     vault: null,
     huntFilter: localStorage.getItem(KEYS.huntFilter) || "p1",
     q: "",
-    timer: null
+    timer: null,
+    live: {}
   };
 
   function px(s) {
@@ -213,6 +214,273 @@
     };
   }
 
+  const PLACES = {
+    gruT3: { lat: -23.4273, lng: -46.4813, name: "GRU Terminal 3 LATAM" },
+    tiete: { lat: -23.5162, lng: -46.6246, name: "Rodoviária Tietê" },
+    festhalle: { lat: 50.1116, lng: 8.6508, name: "Festhalle Frankfurt Messe" },
+    hotel: { lat: 50.0708, lng: 8.2445, name: "Intercity Wiesbaden" },
+    fraT1: { lat: 50.0379, lng: 8.5622, name: "FRA Terminal 1" },
+    bosch: { lat: 49.0047, lng: 8.3858, name: "Bosch Karlsruhe" },
+    goiania: { lat: -16.6739, lng: -49.2556, name: "Terminal Rodoviário de Goiânia" }
+  };
+  const FLIGHTS = {
+    out: { iata: "LA8070", icao: "LAN8070", from: "GRU", to: "FRA", dep: "23:40", arr: "16:25", label: "ida GRU → FRA" },
+    back: { iata: "LA8071", icao: "LAN8071", from: "FRA", to: "GRU", dep: "21:30", arr: "04:35", label: "volta FRA → GRU" }
+  };
+
+  function uberTo(p) {
+    const n = encodeURIComponent(p.name);
+    return `https://m.uber.com/ul/?action=setPickup&pickup=myLocation&dropoff[latitude]=${p.lat}&dropoff[longitude]=${p.lng}&dropoff[nickname]=${n}`;
+  }
+  function mapsTo(p, mode) {
+    return `https://maps.apple.com/?daddr=${p.lat},${p.lng}&q=${encodeURIComponent(p.name)}&dirflg=${mode || "d"}`;
+  }
+  function wazeTo(p) {
+    return `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes&q=${encodeURIComponent(p.name)}`;
+  }
+  function translateUrl() {
+    return who() === "maykon"
+      ? "translate://"
+      : "https://translate.google.com/?sl=pt&tl=de&op=tc";
+  }
+  function openTranslate() {
+    const m = who() === "maykon";
+    localStorage.setItem("pit_tr_day", todayStamp("America/Sao_Paulo"));
+    if (m) {
+      window.location.href = "translate://";
+      setTimeout(() => { window.location.href = "https://translate.google.com/?sl=pt&tl=de&op=tc"; }, 900);
+    } else {
+      window.location.href = "googletranslate://";
+      setTimeout(() => { window.location.href = "https://translate.google.com/?sl=pt&tl=de&op=tc"; }, 700);
+    }
+  }
+  function activeFlight() {
+    const now = new Date();
+    const outEnd = new Date("2026-09-06T18:00:00+02:00");
+    return now < outEnd ? FLIGHTS.out : FLIGHTS.back;
+  }
+  function wxWord(code) {
+    if (code === 0) return "céu limpo";
+    if (code <= 3) return "poucas nuvens";
+    if (code <= 48) return "neblina";
+    if (code <= 67) return "chuva";
+    if (code <= 77) return "neve";
+    if (code <= 82) return "aguaceiro";
+    if (code >= 95) return "trovoada";
+    return "variável";
+  }
+
+  function near(place, km) {
+    if (!PIT.here) return false;
+    const dlat = (PIT.here.lat - place.lat) * 111;
+    const dlng = (PIT.here.lng - place.lng) * 111 * Math.cos(place.lat * Math.PI / 180);
+    return Math.hypot(dlat, dlng) < km;
+  }
+
+  function copilotModel() {
+    const st = missionState();
+    let id = (st.current && st.current.id) || (st.phase === "pre" ? "pre" : "done");
+    if (near(PLACES.tiete, 5) && new Date() < new Date("2026-09-05T21:00:00-03:00")) id = "tiete";
+    if (near(PLACES.gruT3, 4) && new Date() < new Date("2026-09-06T00:00:00-03:00")) id = "checkin";
+    if (near(PLACES.festhalle, 2)) {
+      if (id !== "meet8" && id !== "meet9") id = "fair1";
+    }
+    const f = activeFlight();
+    const gru = PLACES.gruT3;
+    const tr = translateUrl();
+    const db = "https://www.bahn.com/de";
+    const rmv = "https://www.rmv.de/c/de/fahrplan/fahrplanauskunft";
+    const fr24 = `https://www.flightradar24.com/data/flights/${f.iata.toLowerCase()}`;
+    const aware = `https://www.flightaware.com/live/flight/${f.icao}`;
+    const latam = "https://www.latamairlines.com/br/pt/acompanhe-seu-voo";
+    const lounge = "https://maps.apple.com/?q=LATAM%20Lounge%20GRU%20T3";
+    let title = "Próximo passo";
+    let sub = st.current ? st.current.sub : "";
+    let primary = { label: "Ver a rota", tab: "rota" };
+    let extra = [];
+
+    if (id === "pre" || id === "bus-pick") {
+      title = "Antes do ônibus";
+      sub = "Crachá impresso, idiomas baixados, passaporte na mão.";
+      primary = { label: who() === "maykon" ? "Abrir Traduzir e baixar DE" : "Abrir Google Tradutor", href: tr, translate: true };
+      extra = [
+        { label: "Rota do embarque", tab: "rota" },
+        { label: "Mapa do terminal", href: mapsTo(PLACES.goiania) }
+      ];
+    } else if (id === "bus-go") {
+      title = "No ônibus para São Paulo";
+      sub = "Chegada Tietê ~13:00. Depois o app já deixa o Uber do T3 pronto.";
+      primary = { label: "Ver o voo LA8070", href: fr24 };
+      extra = [{ label: "Frases do aeroporto", tab: "falar" }];
+    } else if (id === "tiete") {
+      title = "Tietê → GRU T3";
+      sub = "LATAM é o Terminal 3. Carro 50–70 min. Vocês têm buffer enorme até o check-in 20:40.";
+      primary = { label: "Chamar Uber para o T3", href: uberTo(gru) };
+      extra = [
+        { label: "Waze", href: wazeTo(gru) },
+        { label: "Mapas", href: mapsTo(gru) }
+      ];
+    } else if (id === "checkin") {
+      title = "Check-in LATAM T3";
+      sub = "Passaporte. Equipe FIEMG no embarque. Inter / Infinite = sala VIP.";
+      primary = { label: "Acompanhar LA8070 ao vivo", href: fr24 };
+      extra = [
+        { label: "LATAM", href: latam },
+        { label: "Lounge T3", href: lounge }
+      ];
+    } else if (id === "flight-out" || id === "flight-back") {
+      title = id === "flight-out" ? "No ar · GRU → FRA" : "No ar · FRA → GRU";
+      sub = "Quando aterrissar: esperar o GRUPO. Não pegar S-Bahn sozinho.";
+      primary = { label: "Radar do voo " + f.iata, href: fr24 };
+      extra = [
+        { label: "FlightAware", href: aware },
+        { label: "Frases", tab: "falar" }
+      ];
+    } else if (id === "arrive") {
+      title = "FRA · esperar o grupo";
+      sub = "Alfândega + mala + ônibus Wiesbaden. Não inventar caminho.";
+      primary = { label: "Hotel no mapa", href: mapsTo(PLACES.hotel) };
+      extra = [
+        { label: "Radar LA8070", href: fr24 },
+        { label: "Cofre / localizador", tab: "cofre" }
+      ];
+    } else if (id === "bosch-go" || id === "bosch") {
+      title = "Bosch Karlsruhe";
+      sub = "Business casual, sapato fechado. ~1h30 de van/ônibus.";
+      primary = { label: "Mapa Bosch Karlsruhe", href: mapsTo(PLACES.bosch) };
+      extra = [{ label: "Traduzir", href: tr, translate: true }];
+    } else if (id === "fair1-go" || id === "fair2-go") {
+      title = "Hotel → Festhalle";
+      sub = "Wiesbaden Hbf plat. 4 → Frankfurt Hbf → U4 1 parada. 50–60 min.";
+      primary = { label: "Abrir tradução agora", href: tr, translate: true };
+      extra = [
+        { label: "Trem / Maps", href: mapsTo(PLACES.festhalle, "r") },
+        { label: "RMV", href: rmv }
+      ];
+    } else if (id === "photo" || id === "fair1" || id === "fair2" || id === "free" || id === "fair-last") {
+      title = "Na feira";
+      sub = "Três perguntas. Cartão + foto. Reencontro 18h Entrance City / Festhalle.";
+      primary = { label: "Abrir tradução agora", href: tr, translate: true };
+      extra = [
+        { label: "Caça P1", tab: "caca" },
+        { label: "Festhalle 18h", href: mapsTo(PLACES.festhalle) }
+      ];
+    } else if (id === "meet8" || id === "meet9") {
+      title = "Reencontro agora";
+      sub = "Entrance City / Festhalle. Não inventar outro ponto.";
+      primary = { label: "Mapa Festhalle", href: mapsTo(PLACES.festhalle) };
+      extra = [{ label: "Avisar no WhatsApp", href: "https://wa.me/?text=" + encodeURIComponent("Estou no reencontro · Entrance City / Festhalle") }];
+    } else if (id === "stutt") {
+      title = "Stuttgart com o grupo";
+      sub = "Porsche 09:15 · Mercedes 14:10 · MotorWorld 16:40.";
+      primary = { label: "Traduzir", href: tr, translate: true };
+    } else if (id === "checkout" || id === "checkin-back") {
+      title = "Saída de Frankfurt";
+      sub = "Mala no depósito. Transfer 17:30. Check-in 18:30 · LA8071 21:30.";
+      primary = { label: "Radar LA8071", href: "https://www.flightradar24.com/data/flights/la8071" };
+      extra = [
+        { label: "FRA T1", href: mapsTo(PLACES.fraT1) },
+        { label: "LATAM", href: latam }
+      ];
+    } else if (id === "tiete-back") {
+      title = "Tietê → Goiânia";
+      sub = "Ônibus 13:00 · poltronas 75 e 79.";
+      primary = { label: "Mapa Tietê", href: mapsTo(PLACES.tiete) };
+    } else if (st.phase === "done") {
+      title = "Follow-up";
+      sub = "Relatório Auto Fix e e-mails dos leads.";
+      primary = { label: "Abrir os leads", tab: "caca" };
+    }
+
+    return { id, title, sub, primary, extra: extra.slice(0, 3), flight: f, fr24, latam };
+  }
+
+  function copilotPanel() {
+    const c = copilotModel();
+    const live = PIT.live || {};
+    const ac = live.flight;
+    const fl = c.flight;
+    const primary = c.primary.href
+      ? `<a class="pit-btn" href="${px(c.primary.href)}" ${c.primary.translate ? 'data-translate="1"' : ""}>${px(c.primary.label)}</a>`
+      : `<button class="pit-btn" data-pit-tab="${px(c.primary.tab)}">${px(c.primary.label)}</button>`;
+    const extras = c.extra.map((x) => x.href
+      ? `<a class="pit-btn ghost" href="${px(x.href)}" ${x.translate ? 'data-translate="1"' : ""}>${px(x.label)}</a>`
+      : `<button class="pit-btn ghost" data-pit-tab="${px(x.tab)}">${px(x.label)}</button>`
+    ).join("");
+    const alt = ac
+      ? `${Math.round((ac.alt_baro || ac.alt_geom || 0))} ft · ${Math.round(ac.gs || 0)} kt`
+      : "programado";
+    const where = ac && ac.lat ? `${ac.lat.toFixed(2)}°, ${ac.lon.toFixed(2)}°` : `${fl.from} → ${fl.to}`;
+    return `<section class="pit-copilot">
+      <div class="pit-kicker">Fazer agora</div>
+      <h3>${px(c.title)}</h3>
+      <p class="pit-muted">${px(c.sub)}</p>
+      ${primary}
+      <div class="pit-btns two">${extras}</div>
+      <div class="pit-flight">
+        <div class="pit-kicker">${px(fl.iata)} · ${px(fl.label)}</div>
+        <div class="xx" id="pit-flight-line">${px(where)} · ${px(alt)}</div>
+        <p class="pit-muted" style="margin-top:6px">Partida ${px(fl.dep)} · chegada ${px(fl.arr)}</p>
+        <div class="pit-btns two" style="margin-top:10px">
+          <a class="pit-btn ghost sm" href="${px(c.fr24)}">Flightradar</a>
+          <a class="pit-btn ghost sm" href="${px(c.latam)}">LATAM</a>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function linguasCard() {
+    return `<button type="button" class="pit-linguas" onclick="nav('home')">
+      <b>Inglês Turbo</b>
+      <span>Abrir o curso de idiomas — frases, revisão e alemão.</span>
+    </button>`;
+  }
+
+  async function refreshLive() {
+    try {
+      const [wxR, eurR] = await Promise.all([
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=50.11&longitude=8.68&current=temperature_2m,weather_code,precipitation").then((r) => r.json()).catch(() => null),
+        fetch("https://economia.awesomeapi.com.br/json/last/EUR-BRL").then((r) => r.json()).catch(() => null)
+      ]);
+      if (wxR && wxR.current) PIT.live.wx = wxR.current;
+      if (eurR && eurR.EURBRL) PIT.live.eur = +eurR.EURBRL.bid;
+    } catch (e) {}
+    try {
+      const f = activeFlight();
+      let ac = null;
+      for (const url of [
+        "https://api.adsb.lol/v2/callsign/" + f.icao,
+        "https://api.airplanes.live/v2/callsign/" + f.icao
+      ]) {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) continue;
+          const j = await r.json();
+          ac = (j.ac || [])[0] || null;
+          if (ac) break;
+        } catch (e) {}
+      }
+      PIT.live.flight = ac;
+    } catch (e) {}
+    const liveEl = document.getElementById("pit-live");
+    if (liveEl) liveEl.innerHTML = liveChips();
+    const line = document.getElementById("pit-flight-line");
+    if (line && PIT.live.flight) {
+      const ac = PIT.live.flight;
+      line.textContent = `${(ac.lat || 0).toFixed(2)}°, ${(ac.lon || 0).toFixed(2)}° · ${Math.round(ac.alt_baro || 0)} ft · ${Math.round(ac.gs || 0)} kt`;
+    }
+  }
+
+  function liveChips() {
+    const L = PIT.live || {};
+    const bits = [];
+    if (L.eur) bits.push(`Euro <b>R$ ${L.eur.toFixed(2)}</b>`);
+    if (L.wx) bits.push(`Frankfurt <b>${Math.round(L.wx.temperature_2m)}° · ${wxWord(L.wx.weather_code)}</b>`);
+    if (L.flight) bits.push(`${activeFlight().iata} <b>no ar</b>`);
+    else bits.push(`${activeFlight().iata} <b>no horário</b>`);
+    return bits.join(" · ") || "Ao vivo";
+  }
+
   function subnav() {
     return `<div class="pit-sub">${SUBS.map((s) =>
       `<button class="${PIT.tab === s.id ? "on" : ""}" data-pit-tab="${s.id}">${s.label}</button>`
@@ -242,6 +510,7 @@
         <div><b>Goiânia</b><span>${fmtClock("America/Sao_Paulo")}</span></div>
         <div><b>Frankfurt</b><span>${fmtClock("Europe/Berlin")}</span></div>
       </div>
+      <div class="pit-live" id="pit-live">${liveChips()}</div>
       <div class="pit-rule"></div>
       <div class="pit-now">${px(title)}</div>
       <div class="pit-subcopy">${px(sub)}</div>
@@ -296,6 +565,7 @@
         <div>${px(p.label)}</div>
       </label>`).join("");
     return `
+      ${copilotPanel()}
       ${missing.length ? `<div class="pit-warn">Antes do ônibus: ${px(missing.join(" · "))}.</div>` : ""}
       <div class="pit-stat">
         <div><b>${prog.p1Done}/${prog.p1}</b><span>P1</span></div>
@@ -436,73 +706,121 @@
         </div>`).join("") || `<p class="pit-muted">Nenhuma frase.</p>`}`;
   }
 
-  function vaultItem(label, value, copyVal, extra) {
-    const btn = copyVal
-      ? `<button class="pit-copy" data-copy="${px(copyVal)}">copiar</button>`
-      : (extra || "");
-    return `<div class="pit-vault"><div><b>${px(label)}</b><span>${px(value)}</span></div>${btn}</div>`;
+  function cell(label, value, copyVal) {
+    const copy = copyVal ? ` <button class="pit-copy" data-copy="${px(copyVal)}">copiar</button>` : "";
+    return `<div><b>${px(label)}</b><span>${px(value)}</span>${copy}</div>`;
   }
 
   function viewCofre() {
     const v = PIT.vault;
     if (!v) {
-      return `<div class="pit-card pit-lock">
-        <h2>Cofre</h2>
-        <p class="pit-muted">Códigos, e-tickets, documentos. O ano da missão, com FIX na frente.</p>
+      return `<div class="pit-card pit-lockscreen">
+        <div class="pit-kicker">Privado</div>
+        <div class="pit-now">Cofre</div>
+        <p>Localizador, e-tickets, hotel e documentos. O ano da missão, com FIX na frente.</p>
         <form id="pit-lock">
-          <input class="pit-field" id="pit-pin" type="password" inputmode="text" autocomplete="off" placeholder="PIN" maxlength="12">
+          <input class="pit-field" id="pit-pin" type="password" inputmode="text" autocomplete="off" placeholder="••••••" maxlength="12">
           <button class="pit-btn" type="submit">Abrir</button>
         </form>
       </div>
       <div class="pit-card">
-        <h2>Commute</h2>
-        <p>5–7 min a pé → Wiesbaden Hbf plataforma 4 → RE/RB ~35–40 min → Frankfurt Hbf → U4 sentido Bockenheimer Warte, 1 estação → Festhalle/Messe. 50–60 min. Apps: DB Navigator + RMV.</p>
+        <h2>Trem até a feira</h2>
+        <p>5–7 min a pé → Wiesbaden Hbf plataforma 4 → RE/RB ~35–40 min → Frankfurt Hbf → U4 sentido Bockenheimer Warte, 1 parada → Festhalle/Messe.</p>
+        <div class="pit-btns two" style="margin-top:12px">
+          <a class="pit-btn ghost" href="${mapsTo(PLACES.festhalle, "r")}">Maps</a>
+          <a class="pit-btn ghost" href="https://www.rmv.de/c/de/fahrplan/fahrplanauskunft">RMV</a>
+        </div>
       </div>`;
     }
+    const maykonEt = v.flights.maykon.replace(/\s/g, "");
+    const denisEt = v.flights.denis.replace(/\s/g, "");
     return `
-      <div class="pit-card"><h2>Voo LATAM</h2>
-        ${vaultItem("Localizador", v.flights.pnr, v.flights.pnr)}
-        ${vaultItem("Ida", v.flights.out)}
-        ${vaultItem("Volta", v.flights.back)}
-        ${vaultItem("Maykon e-ticket", v.flights.maykon, v.flights.maykon.replace(/\s/g, ""))}
-        ${vaultItem("Denis e-ticket", v.flights.denis, v.flights.denis.replace(/\s/g, ""))}
-      </div>
-      <div class="pit-card"><h2>Ônibus</h2>
-        ${vaultItem("Ida", v.bus.out, v.bus.out.split(" · ")[0])}
-        ${vaultItem("Volta", v.bus.back, v.bus.back.split(" · ")[0])}
-        <p class="pit-muted">${px(v.bus.note)}</p>
-      </div>
-      <div class="pit-card"><h2>Hotel</h2>
-        ${vaultItem("Intercity Wiesbaden", v.hotel.addr)}
-        ${vaultItem("Block", v.hotel.block, v.hotel.block)}
-        ${vaultItem("Quarto", v.hotel.room)}
-        ${vaultItem("Hotel", v.hotel.phone, null, `<a class="pit-copy" href="tel:${px(v.hotel.tel)}">ligar</a>`)}
-        <p class="pit-muted">${px(v.hotel.note)}</p>
-      </div>
-      <div class="pit-card"><h2>Feira + RMV</h2>
-        ${vaultItem("Maykon ticket", v.fair.maykonTicket, v.fair.maykonTicket.replace(/\s/g, ""))}
-        ${vaultItem("KombiTicket", v.fair.kombi, v.fair.kombi.split(" · ")[0])}
-        ${vaultItem("Denis", v.fair.denis)}
-        <p class="pit-muted">${px(v.fair.note)}</p>
-      </div>
-      <div class="pit-card"><h2>Seguro</h2>
-        ${vaultItem("Maykon", v.insurance.maykon, v.insurance.maykon.replace(/\s/g, "").slice(0, 11))}
-        ${vaultItem("Denis", v.insurance.denis, v.insurance.denis.replace(/\s/g, "").slice(0, 11))}
-        ${vaultItem("Vigência", v.insurance.when)}
-        <p class="pit-muted">${px(v.insurance.note)}</p>
-      </div>
-      <div class="pit-card"><h2>Pessoas</h2>
-        ${vaultItem("Maykon", v.people.maykon)}
-        ${vaultItem("Denis", v.people.denis)}
-        ${vaultItem("Empresa", v.people.company)}
-        ${vaultItem("Drucker", v.people.drucker)}
-      </div>
-      <div class="pit-card"><h2>Cartões</h2><p>${px(v.cards)}</p></div>
-      <button class="pit-btn ghost" id="pit-lock-again">Travar cofre</button>
-      <div class="pit-card" style="margin-top:14px">
-        <h2>Commute</h2>
-        <p>5–7 min a pé → Wiesbaden Hbf plataforma 4 → RE/RB ~35–40 min → Frankfurt Hbf → U4 1 estação → Festhalle/Messe.</p>
-      </div>`;
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>LATAM</span><span>LA8070 · IDA</span></div>
+        <div class="pit-pass-route">
+          <div><b>GRU</b><small>T3 · 05/set 23:40</small></div>
+          <div class="pit-pass-line"></div>
+          <div class="to"><b>FRA</b><small>T1 · 06/set 16:25</small></div>
+        </div>
+        <div class="pit-pass-grid">
+          ${cell("Localizador", v.flights.pnr, v.flights.pnr)}
+          ${cell("Aeronave", "777")}
+          ${cell("Maykon", v.flights.maykon, maykonEt)}
+          ${cell("Denis", v.flights.denis, denisEt)}
+        </div>
+      </article>
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>LATAM</span><span>LA8071 · VOLTA</span></div>
+        <div class="pit-pass-route">
+          <div><b>FRA</b><small>T1 · 12/set 21:30</small></div>
+          <div class="pit-pass-line"></div>
+          <div class="to"><b>GRU</b><small>T3 · 13/set 04:35</small></div>
+        </div>
+        <div class="pit-pass-grid">
+          ${cell("Localizador", v.flights.pnr, v.flights.pnr)}
+          ${cell("Check-in", "18:30")}
+          <div class="wide"><b>Radar</b><span>LA8071</span> <a class="pit-copy" href="https://www.flightradar24.com/data/flights/la8071">abrir</a></div>
+        </div>
+      </article>
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>Expresso São Luiz</span><span>ÔNIBUS</span></div>
+        <div class="pit-pass-grid">
+          ${cell("Ida", v.bus.out.split(" · ")[0], v.bus.out.split(" · ")[0])}
+          ${cell("Volta", v.bus.back.split(" · ")[0], v.bus.back.split(" · ")[0])}
+          <div class="wide"><b>Trecho</b><span>${px(v.bus.out)}</span></div>
+          <div class="wide"><b>Volta</b><span>${px(v.bus.back)}</span></div>
+        </div>
+        <p class="pit-muted" style="margin-top:12px">${px(v.bus.note)}</p>
+      </article>
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>Intercity</span><span>WIESBADEN</span></div>
+        <div class="pit-pass-route">
+          <div><b>IN</b><small>06/set 15:00</small></div>
+          <div class="pit-pass-line"></div>
+          <div class="to"><b>OUT</b><small>12/set 12:00</small></div>
+        </div>
+        <div class="pit-pass-grid">
+          ${cell("Block", v.hotel.block, v.hotel.block)}
+          ${cell("Quarto", "Business Twin")}
+          <div class="wide"><b>Endereço</b><span>${px(v.hotel.addr)}</span></div>
+          <div class="wide"><b>Telefone</b><span>${px(v.hotel.phone)}</span> <a class="pit-copy" href="tel:${px(v.hotel.tel)}">ligar</a></div>
+        </div>
+        <p class="pit-muted" style="margin-top:12px">${px(v.hotel.note)}</p>
+        <div class="pit-btns two" style="margin-top:12px">
+          <a class="pit-btn ghost" href="${mapsTo(PLACES.hotel)}">Mapa</a>
+          <a class="pit-btn ghost" href="https://wa.me/?text=${encodeURIComponent("Hotel Intercity Wiesbaden, Klingholzstraße 6")}">WhatsApp</a>
+        </div>
+      </article>
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>Automechanika</span><span>RMV</span></div>
+        <div class="pit-pass-grid">
+          ${cell("Crachá Maykon", v.fair.maykonTicket, v.fair.maykonTicket.replace(/\s/g, ""))}
+          ${cell("KombiTicket", v.fair.kombi.split(" · ")[0], v.fair.kombi.split(" · ")[0])}
+          <div class="wide"><b>Denis</b><span>${px(v.fair.denis)}</span></div>
+        </div>
+        <p class="pit-muted" style="margin-top:12px">${px(v.fair.note)}</p>
+      </article>
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>Assist Card</span><span>PLANO 150</span></div>
+        <div class="pit-pass-grid">
+          ${cell("Maykon", v.insurance.maykon, v.insurance.maykon.replace(/\s/g, "").slice(0, 11))}
+          ${cell("Denis", v.insurance.denis, v.insurance.denis.replace(/\s/g, "").slice(0, 11))}
+          <div class="wide"><b>Vigência</b><span>${px(v.insurance.when)}</span></div>
+        </div>
+        <p class="pit-muted" style="margin-top:12px">${px(v.insurance.note)}</p>
+        <a class="pit-btn ghost" style="margin-top:12px" href="tel:+34917883333">Ligar Europa</a>
+      </article>
+      <article class="pit-pass">
+        <div class="pit-pass-top"><span>Auto Fix</span><span>PESSOAS</span></div>
+        <div class="pit-pass-grid">
+          <div class="wide"><b>Maykon</b><span>${px(v.people.maykon)}</span></div>
+          <div class="wide"><b>Denis</b><span>${px(v.people.denis)}</span></div>
+          <div class="wide"><b>Empresa</b><span>${px(v.people.company)}</span></div>
+          <div class="wide"><b>Drucker</b><span>${px(v.people.drucker)}</span></div>
+        </div>
+        <p class="pit-muted" style="margin-top:12px">${px(v.cards)}</p>
+      </article>
+      <button class="pit-btn ghost" id="pit-lock-again">Travar cofre</button>`;
   }
 
   function body() {
@@ -514,7 +832,7 @@
   }
 
   function view() {
-    return `<div class="pit" id="pit-root">${hero()}${subnav()}<div class="pit-pad">${body()}</div></div>`;
+    return `<div class="pit" id="pit-root">${hero()}<div class="pit-pad">${body()}${linguasCard()}</div></div>`;
   }
 
   function showCard(text, sub) {
@@ -605,6 +923,8 @@
     });
 
     root.addEventListener("click", (e) => {
+      const tr = e.target.closest("[data-translate]");
+      if (tr) { e.preventDefault(); openTranslate(); return; }
       const tab = e.target.closest("[data-pit-tab]");
       if (tab) { PIT.tab = tab.dataset.pitTab; remount(); return; }
       const hf = e.target.closest("[data-hf]");
@@ -723,12 +1043,23 @@
     if (PIT.timer) clearInterval(PIT.timer);
     PIT.timer = setInterval(() => {
       if (window.TAB !== "pit") return;
+      refreshLive();
       const ae = document.activeElement;
       if (ae && /INPUT|TEXTAREA/.test(ae.tagName)) return;
       remount();
     }, 30000);
+    refreshLive();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((p) => { PIT.here = { lat: p.coords.latitude, lng: p.coords.longitude }; }, () => {}, { maximumAge: 180000, timeout: 6000 });
+    }
   }
 
+  PIT.go = function (id) {
+    PIT.tab = id;
+    if (window.TAB !== "pit" && typeof nav === "function") nav("pit");
+    else remount();
+    window.scrollTo(0, 0);
+  };
   window.viewPit = view;
   window.PIT = PIT;
   window.PIT.mount = mount;
