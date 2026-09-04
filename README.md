@@ -1,5 +1,12 @@
 # 🚀 Línguas · AutoFix
 
+**Este domínio agora serve o ASTOR (missão Automechanika).**  
+App: https://astor-lovat.vercel.app — em breve no próprio `linguas.autofixtecnologia.app` (DNS).
+
+O curso Inglês Turbo continua neste repositório (histórico do git). Para reabrir o HTML antigo: `git log -- index.html`.
+
+---
+
 Plataforma de aprendizado acelerado de idiomas — **linguas.autofixtecnologia.app**
 
 Curso atual: **Inglês Turbo** — 7 semanas de conversação de sobrevivência para viagem (metodologia FSI + Pimsleur + shadowing + repetição espaçada), com bônus de alemão de cortesia.
